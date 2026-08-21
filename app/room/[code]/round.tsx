@@ -103,20 +103,27 @@ export default function RoundPhase({
       }
 
       if (diff === 0 && !showReveal) {
+        console.log('[round] mostrando reveal')
         setShowReveal(true)
         audioRef.current?.pause()
       }
 
       if (diff === 0 && isHost && !advanceScheduled.current) {
+        console.log('[round] host programando avance. currentRound:', currentRound, 'totalRounds:', totalRounds)
         advanceScheduled.current = true
         setTimeout(() => {
+          console.log('[round] timeout disparado')
           if (currentRound >= totalRounds) {
+            console.log('[round] pasando a finished')
             supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
+              .then(({ error }) => console.log('[round] error finished:', error))
           } else {
+            console.log('[round] pasando a ronda', currentRound + 1)
             supabase.from('rooms').update({
               current_round: currentRound + 1,
               round_deadline: new Date(Date.now() + ROUND_SECONDS * 1000).toISOString()
             }).eq('id', roomId)
+              .then(({ error }) => console.log('[round] error next round:', error))
           }
         }, REVEAL_SECONDS * 1000)
       }

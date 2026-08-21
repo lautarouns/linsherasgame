@@ -30,6 +30,7 @@ export default function RoomPage() {
   const [room, setRoom] = useState<Room | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [playerId, setPlayerId] = useState<string | null>(null)
+  const [onlinePlayerIds, setOnlinePlayerIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     setPlayerId(localStorage.getItem('playerId'))
@@ -59,7 +60,6 @@ export default function RoomPage() {
         event: 'UPDATE', schema: 'public', table: 'rooms',
         filter: `id=eq.${room.id}`
       }, payload => {
-        console.log('[realtime rooms UPDATE]', payload.new)
         setRoom(payload.new as Room)
       })
       .on('postgres_changes', {
@@ -78,9 +78,32 @@ export default function RoomPage() {
     return () => { supabase.removeChannel(channel) }
   }, [room?.id])
 
+  // Presencia: detecta en vivo quién sigue con la pestaña abierta
+  useEffect(() => {
+    if (!room || !playerId) return
+
+    const presenceChannel = supabase.channel(`presence-${room.id}`, {
+      config: { presence: { key: playerId } }
+    })
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState()
+        setOnlinePlayerIds(new Set(Object.keys(state)))
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({ online_at: new Date().toISOString() })
+        }
+      })
+
+    return () => { supabase.removeChannel(presenceChannel) }
+  }, [room?.id, playerId])
+
   if (!room || !playerId) return <p style={{ padding: 40 }}>Cargando sala...</p>
 
-  const isHost = players.length > 0 && players[0].id === playerId
+  const onlinePlayers = players.filter(p => onlinePlayerIds.has(p.id))
+  const isHost = onlinePlayers.length > 0 && onlinePlayers[0].id === playerId
 
   return (
     <div style={{ padding: 40, maxWidth: 500, margin: '0 auto' }}>
@@ -88,9 +111,9 @@ export default function RoomPage() {
 
       {room.status === 'lobby' && (
         <>
-          <h3>Jugadores ({players.length})</h3>
+          <h3>Jugadores ({onlinePlayers.length})</h3>
           <ul>
-            {players.map(p => (
+            {onlinePlayers.map(p => (
               <li key={p.id}>{p.nickname}{p.id === playerId ? ' (vos)' : ''}</li>
             ))}
           </ul>
@@ -110,7 +133,7 @@ export default function RoomPage() {
           playerId={playerId}
           deadline={room.picking_deadline}
           isHost={isHost}
-          totalPlayers={players.length}
+          totalPlayers={onlinePlayers.length}
         />
       )}
 
@@ -121,13 +144,13 @@ export default function RoomPage() {
           currentRound={room.current_round}
           roundDeadline={room.round_deadline}
           isHost={isHost}
-          totalRounds={players.length}
+          totalRounds={onlinePlayers.length}
         />
       )}
 
       {room.status === 'finished' && (
-      <Scoreboard players={players} playerId={playerId} roomId={room.id} isHost={isHost} />
-    )}
+        <Scoreboard players={players} playerId={playerId} roomId={room.id} isHost={isHost} />
+      )}
     </div>
   )
 }
