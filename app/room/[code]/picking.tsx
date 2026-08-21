@@ -137,53 +137,49 @@ export default function PickingPhase({
 
   if (doneWithMine) {
     return (
-      <div style={{ marginTop: 20 }}>
-        <p>Elegiste tus {songsPerPlayer} canciones:</p>
-        <ul style={{ paddingLeft: 18 }}>
+      <div className="room-section">
+        <h2 className="section-title">Tus elecciones</h2>
+        <ul className="pick-list">
           {myPicks.map(t => (
-            <li key={t.trackId}>{t.trackName} — {t.artistName}</li>
+            <li key={t.trackId} className="pick-item">
+              <span><strong>{t.trackName}</strong> — {t.artistName}</span>
+            </li>
           ))}
         </ul>
-        <p>Esperando a los demás... {secondsLeft}s ({picksCount}/{totalExpectedPicks})</p>
+        <p className="status-box">Esperando a los demás... {secondsLeft}s ({picksCount}/{totalExpectedPicks})</p>
       </div>
     )
   }
 
   return (
-    <div style={{ marginTop: 20 }}>
-      <h2>Elegí tu canción {myPicks.length + 1} de {songsPerPlayer} — {secondsLeft}s</h2>
-      <p style={{ fontSize: 13, opacity: 0.7 }}>{picksCount}/{totalExpectedPicks} elegidas en total</p>
+    <div className="room-section">
+      <h2 className="section-title">Elegí tu canción {myPicks.length + 1} de {songsPerPlayer} — {secondsLeft}s</h2>
+      <p className="info-box">{picksCount}/{totalExpectedPicks} elegidas en total</p>
 
       {myPicks.length > 0 && (
-        <ul style={{ paddingLeft: 18, fontSize: 13, opacity: 0.8 }}>
+        <ul className="pick-list" style={{ marginTop: 12 }}>
           {myPicks.map(t => (
-            <li key={t.trackId}>{t.trackName} — {t.artistName}</li>
+            <li key={t.trackId} className="pick-item">
+              <span><strong>{t.trackName}</strong> — {t.artistName}</span>
+            </li>
           ))}
         </ul>
       )}
 
-      <input
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        placeholder="Buscar canción..."
-        style={{ width: '100%', padding: 8 }}
-      />
-      <ul style={{ listStyle: 'none', padding: 0, marginTop: 12 }}>
+      <div style={{ marginTop: 14 }}>
+        <input
+          className="form-field"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Buscar canción..."
+        />
+      </div>
+
+      <ul className="track-results" style={{ marginTop: 12 }}>
         {results.map(track => (
-          <li
-            key={track.trackId}
-            onClick={() => choosePick(track)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: 8,
-              cursor: 'pointer',
-              borderBottom: '1px solid #333'
-            }}
-          >
+          <li key={track.trackId} className="track-result" onClick={() => choosePick(track)}>
             <img src={track.artworkUrl100} width={40} height={40} alt="" />
-            <span>{track.trackName} — {track.artistName}</span>
+            <span><strong>{track.trackName}</strong> — {track.artistName}</span>
           </li>
         ))}
       </ul>

@@ -108,47 +108,60 @@ export default function RoomPage() {
   if (!room || !playerId) return <p style={{ padding: 40 }}>Cargando sala...</p>
 
   const onlinePlayers = players.filter(p => onlinePlayerIds.has(p.id))
-  const isHost = onlinePlayers.length > 0 && onlinePlayers[0].id === playerId
+  const hostPlayerId = players[0]?.id ?? null
+  const isHost = hostPlayerId === playerId
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', gap: 32, padding: 40 }}>
-      <div style={{ maxWidth: 500, width: '100%' }}>
-        <h1>Sala {room.code}</h1>
+    <div className="room-shell">
+      <div className="room-panel">
+        <div className="room-header">
+          <h1 className="room-title">Sala {room.code}</h1>
+          <span className="room-badge">{room.status}</span>
+        </div>
 
         {room.status === 'lobby' && (
           <>
-            <h3>Jugadores ({onlinePlayers.length})</h3>
-            <ul>
-              {onlinePlayers.map(p => (
-                <li key={p.id}>{p.nickname}{p.id === playerId ? ' (vos)' : ''}</li>
-              ))}
-            </ul>
+            <div className="room-section">
+              <h3 className="section-title">Jugadores ({onlinePlayers.length})</h3>
+              <ul className="player-table">
+                {onlinePlayers.map(p => {
+                  const playerIsHost = hostPlayerId === p.id
+                  return (
+                    <li key={p.id} className="player-row">
+                      <span><strong>{p.nickname}</strong>{p.id === playerId ? ' (vos)' : ''}</span>
+                      <span className="player-meta">{playerIsHost ? 'Host' : 'Invitado'}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
 
             {isHost && (
-              <>
-                <div style={{ marginTop: 16 }}>
-                  <label>
-                    Canciones por jugador:{' '}
-                    <select
-                      value={songsPerPlayer}
-                      onChange={e => setSongsPerPlayer(Number(e.target.value))}
-                      style={{ padding: 4 }}
-                    >
-                      {[1, 2, 3, 4, 5].map(n => (
-                        <option key={n} value={n}>{n}</option>
-                      ))}
-                    </select>
-                  </label>
+              <div className="field-group">
+                <div className="select-wrap">
+                  <label>Canciones por jugador</label>
+                  <select
+                    className="select-oscuro"
+                    value={songsPerPlayer}
+                    onChange={e => setSongsPerPlayer(Number(e.target.value))}
+                  >
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
                 </div>
+
                 <button
                   onClick={() => startPickingPhase(room.id, songsPerPlayer)}
-                  style={{ padding: 10, marginTop: 12 }}
+                  className="btn-principal"
+                  style={{ width: '100%' }}
                 >
                   Iniciar juego
                 </button>
-              </>
+              </div>
             )}
-            {!isHost && <p>Esperando a que el host inicie el juego...</p>}
+
+            {!isHost && <p className="status-box">Esperando a que el host inicie el juego...</p>}
           </>
         )}
 

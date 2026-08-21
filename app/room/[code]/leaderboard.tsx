@@ -16,28 +16,17 @@ export default function Leaderboard({
   const sorted = [...players].sort((a, b) => b.total_score - a.total_score)
 
   return (
-    <div style={{ width: 220, flexShrink: 0 }}>
-      <h3 style={{ marginTop: 0, fontSize: 15 }}>🏆 Leaderboard</h3>
-      <ol style={{ padding: 0, listStyle: 'none' }}>
+    <aside className="sidebar">
+      <h3 className="sidebar-title">🏆 Leaderboard</h3>
+      <ol className="leaderboard-list">
         {sorted.map((p, i) => (
-          <li
-            key={p.id}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '6px 10px',
-              marginBottom: 4,
-              borderRadius: 6,
-              background: i === 0 ? '#3a3320' : '#1c1c1c',
-              fontWeight: p.id === playerId ? 700 : 400,
-              fontSize: 13
-            }}
-          >
-            <span>#{i + 1} {p.nickname}{p.id === playerId ? ' (vos)' : ''}</span>
+          <li key={p.id} className="leaderboard-row">
+            <span className="leaderboard-rank">#{i + 1}</span>
+            <span><strong>{p.nickname}</strong>{p.id === playerId ? ' (vos)' : ''}</span>
             <span>{p.total_score}</span>
           </li>
         ))}
       </ol>
-    </div>
+    </aside>
   )
 }

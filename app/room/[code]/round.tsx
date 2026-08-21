@@ -216,26 +216,31 @@ export default function RoundPhase({
       )}
 
       {showHint && (
-        <p style={{ letterSpacing: 2, fontFamily: 'monospace', fontSize: 20 }}>
-          {maskTitle(baseTitle(round.picks.track_name), revealedIdx)}
-        </p>
+        <div className="hint-box">
+          <p className="hint-text">
+            {maskTitle(baseTitle(round.picks.track_name), revealedIdx)}
+          </p>
+        </div>
       )}
 
-      {isOwnSong && <p>Esta es tu canción — esperá el resultado.</p>}
+      {isOwnSong && <p className="status-box">Esta es tu canción — esperá el resultado.</p>}
 
-      {!isOwnSong && correct && <p>¡Correcto! Sumaste {earned} puntos.</p>}
-      {!isOwnSong && !correct && showWrong && <p>No es esa canción, seguí intentando.</p>}
+      {!isOwnSong && correct && <p className="status-box">¡Correcto! Sumaste {earned} puntos.</p>}
+      {!isOwnSong && !correct && showWrong && <p className="status-box">No es esa canción, seguí intentando.</p>}
 
       {!isOwnSong && !correct && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <input
-            value={guess}
-            onChange={e => { setGuess(e.target.value); setShowWrong(false) }}
-            onKeyDown={e => e.key === 'Enter' && submitGuess()}
-            placeholder="Nombre de la canción"
-            style={{ flex: 1, padding: 8 }}
-          />
-          <button onClick={submitGuess} style={{ padding: '8px 16px' }}>Adivinar</button>
+        <div className="guess-panel">
+          <p className="guess-header">Tu intento</p>
+          <div className="guess-input-wrap">
+            <input
+              className="guess-input"
+              value={guess}
+              onChange={e => { setGuess(e.target.value); setShowWrong(false) }}
+              onKeyDown={e => e.key === 'Enter' && submitGuess()}
+              placeholder="Nombre de la canción"
+            />
+            <button onClick={submitGuess} className="btn-principal" style={{ padding: '10px 16px' }}>Adivinar</button>
+          </div>
         </div>
       )}
     </div>

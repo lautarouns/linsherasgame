@@ -56,31 +56,47 @@ export default function Home() {
   }
 
   return (
-    <div style={{ padding: 40, maxWidth: 400, margin: '0 auto' }}>
-      <h1>Adiviná la canción</h1>
-
-      <input
-        placeholder="Tu nombre"
-        value={nickname}
-        onChange={e => setNickname(e.target.value)}
-        style={{ width: '100%', padding: 8, marginTop: 20 }}
-      />
-
-      <button onClick={createRoom} style={{ width: '100%', padding: 10, marginTop: 12 }}>
-        Crear sala nueva
-      </button>
-
-      <div style={{ marginTop: 24, display: 'flex', gap: 8 }}>
-        <input
-          placeholder="Código de sala"
-          value={joinCode}
-          onChange={e => setJoinCode(e.target.value)}
-          style={{ flex: 1, padding: 8 }}
-        />
-        <button onClick={joinRoom} style={{ padding: '10px 16px' }}>
-          Unirse
-        </button>
+    <div className="page-shell">
+      <div className="brand-header">
+        <h1 className="brand-title">SONGLIO</h1>
+        <span className="brand-kicker">GAME</span>
       </div>
+
+      <main className="page-card">
+        <h2 className="page-title">Adiviná la canción</h2>
+        <p className="page-subtitle">Entrá con tu nombre o uníndote a una sala.</p>
+
+        <div style={{ marginTop: 24 }}>
+          <input
+            className="form-field"
+            placeholder="Tu nombre"
+            value={nickname}
+            onChange={e => setNickname(e.target.value)}
+            style={{ marginTop: 0 }}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={createRoom}
+          className="btn-principal"
+          style={{ width: '100%', marginTop: 12 }}
+        >
+          Crear sala nueva
+        </button>
+
+        <div className="form-row">
+          <input
+            className="form-field"
+            placeholder="Código de sala"
+            value={joinCode}
+            onChange={e => setJoinCode(e.target.value)}
+          />
+          <button type="button" onClick={joinRoom} className="btn-principal">
+            Unirse
+          </button>
+        </div>
+      </main>
     </div>
   )
 }

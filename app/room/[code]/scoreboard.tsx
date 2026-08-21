@@ -23,49 +23,35 @@ export default function Scoreboard({
   const sorted = [...players].sort((a, b) => b.score - a.score)
 
   return (
-    <div style={{ marginTop: 20 }}>
-      <h2>Resultados finales</h2>
-      <ol style={{ padding: 0, listStyle: 'none' }}>
+    <div className="scoreboard-panel">
+      <div className="score-header">
+        <h2 className="section-title" style={{ margin: 0 }}>Resultados finales</h2>
+      </div>
+
+      <ol className="score-table">
         {sorted.map((p, i) => (
-          <li
-            key={p.id}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '10px 12px',
-              marginBottom: 6,
-              borderRadius: 6,
-              background: i === 0 ? '#3a3320' : '#1c1c1c',
-              fontWeight: p.id === playerId ? 700 : 400
-            }}
-          >
+          <li key={p.id} className="score-row">
             <span>
-              #{i + 1} {p.nickname}{p.id === playerId ? ' (vos)' : ''}
+              <strong>#{i + 1} {p.nickname}{p.id === playerId ? ' (vos)' : ''}</strong>
               {i === 0 ? ' 🏆' : ''}
             </span>
-            <span>{p.score} pts</span>
+            <span className="score-meta">{p.score} pts</span>
           </li>
         ))}
       </ol>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
-        <button
-          onClick={() => router.push('/')}
-          style={{ flex: 1, padding: 10 }}
-        >
+      <div className="score-actions">
+        <button onClick={() => router.push('/')} className="btn-principal">
           Salir al menú
         </button>
 
         {isHost ? (
-          <button
-            onClick={() => resetGame(roomId)}
-            style={{ flex: 1, padding: 10 }}
-          >
+          <button onClick={() => resetGame(roomId)} className="btn-principal">
             Jugar de nuevo
           </button>
         ) : (
-          <p style={{ flex: 1, textAlign: 'center', fontSize: 13, opacity: 0.7 }}>
-            Esperando al host para jugar de nuevo...
+          <p className="status-box" style={{ flex: 1, marginTop: 0 }}>
+            Esperando al host...
           </p>
         )}
       </div>
