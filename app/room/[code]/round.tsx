@@ -52,6 +52,7 @@ export default function RoundPhase({
   const advanceScheduled = useRef(false)
 
   useEffect(() => {
+    console.log('[round] nueva ronda cargando. currentRound:', currentRound, 'totalRounds:', totalRounds, 'roundDeadline:', roundDeadline)
     setCorrect(false)
     setShowWrong(false)
     setGuess('')
@@ -62,12 +63,13 @@ export default function RoundPhase({
     advanceScheduled.current = false
 
     const load = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('rounds')
         .select('id, round_number, picks(track_name, artist, preview_url, artwork_url, player_id)')
         .eq('room_id', roomId)
         .eq('round_number', currentRound)
         .single()
+      console.log('[round] load rounds. data:', data, 'error:', error)
       if (data) setRound(data as unknown as RoundRow)
     }
     load()
@@ -104,20 +106,27 @@ export default function RoundPhase({
       }
 
       if (diff === 0 && !showReveal) {
+        console.log('[round] mostrando reveal')
         setShowReveal(true)
         audioRef.current?.pause()
       }
 
       if (diff === 0 && isHost && !advanceScheduled.current) {
+        console.log('[round] host programando avance. currentRound:', currentRound, 'totalRounds:', totalRounds)
         advanceScheduled.current = true
         setTimeout(() => {
+          console.log('[round] timeout disparado')
           if (currentRound >= totalRounds) {
+            console.log('[round] pasando a finished')
             supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
+              .then(({ error }) => console.log('[round] error finished:', error))
           } else {
+            console.log('[round] pasando a ronda', currentRound + 1)
             supabase.from('rooms').update({
               current_round: currentRound + 1,
               round_deadline: new Date(nowSynced() + ROUND_SECONDS * 1000).toISOString()
             }).eq('id', roomId)
+              .then(({ error }) => console.log('[round] error next round:', error))
           }
         }, REVEAL_SECONDS * 1000)
       }
