@@ -62,33 +62,39 @@ export default function Home() {
         <span className="brand-kicker">GAME</span>
       </div>
 
-      <main className="page-card">
-        <h2 className="page-title">Adiviná la canción</h2>
-        <p className="page-subtitle">Entrá con tu nombre o uníndote a una sala.</p>
+      <div className="eq">
+        <span /><span /><span /><span />
+      </div>
 
-        <div style={{ marginTop: 24 }}>
-          <input
-            className="form-field"
-            placeholder="Tu nombre"
-            value={nickname}
-            onChange={e => setNickname(e.target.value)}
-            style={{ marginTop: 0 }}
-          />
-        </div>
+      <h2 className="page-title">Adiviná la canción</h2>
+      <p className="page-subtitle">Entrá con tu nombre o uníndote a una sala.</p>
+
+      <main className="page-card">
+        <label className="field-label" htmlFor="nickname">Tu nombre</label>
+        <input
+          id="nickname"
+          className="form-field"
+          placeholder="Tu nombre"
+          value={nickname}
+          onChange={e => setNickname(e.target.value)}
+        />
 
         <button
           type="button"
           onClick={createRoom}
           className="btn-principal"
-          style={{ width: '100%', marginTop: 12 }}
+          style={{ width: '100%', marginTop: 14 }}
         >
           Crear sala nueva
         </button>
 
+        <div className="divider"><span>O unite</span></div>
+
         <div className="form-row">
           <input
             className="form-field"
-            placeholder="Código de sala"
+            placeholder="Código"
+            maxLength={4}
             value={joinCode}
             onChange={e => setJoinCode(e.target.value)}
           />
