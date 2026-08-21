@@ -36,6 +36,7 @@ export default function PickingPhase({
   const [picksCount, setPicksCount] = useState(0)
   const triggered = useRef(false)
   const shortened = useRef(false)
+  const totalSeconds = useRef(0)
 
   const totalExpectedPicks = totalPlayers * songsPerPlayer
 
@@ -43,6 +44,8 @@ export default function PickingPhase({
     const tick = () => {
       const diff = Math.max(0, Math.floor((new Date(deadline).getTime() - nowSynced()) / 1000))
       setSecondsLeft(diff)
+      // Guarda el tramo más largo visto para dibujar la barra de progreso
+      if (diff > totalSeconds.current) totalSeconds.current = diff
 
       if (diff === 0 && isHost && !triggered.current) {
         triggered.current = true
@@ -121,11 +124,28 @@ export default function PickingPhase({
   }, [roomId, playerId])
 
   const doneWithMine = myPicks.length >= songsPerPlayer
+  const pct = totalSeconds.current > 0
+    ? Math.max(0, Math.min(100, (secondsLeft / totalSeconds.current) * 100))
+    : 0
 
   if (doneWithMine) {
     return (
       <div className="room-section">
-        <h2 className="section-title">Tus elecciones</h2>
+        <div className="phase-head">
+          <div>
+            <h2 className="phase-title">Tus elecciones</h2>
+            <p className="phase-sub">{picksCount}/{totalExpectedPicks} elegidas en total</p>
+          </div>
+          <div className="timer-badge">
+            <strong>{secondsLeft}</strong>
+            <span>s</span>
+          </div>
+        </div>
+
+        <div className="timer-track">
+          <div className="timer-fill" style={{ width: `${pct}%` }} />
+        </div>
+
         <ul className="pick-list">
           {myPicks.map(t => (
             <li key={t.trackId} className="pick-item">
@@ -133,27 +153,29 @@ export default function PickingPhase({
             </li>
           ))}
         </ul>
-        <p className="status-box">Esperando a los demás... {secondsLeft}s ({picksCount}/{totalExpectedPicks})</p>
+        <p className="status-box">Esperando a los demás...</p>
       </div>
     )
   }
 
   return (
     <div className="room-section">
-      <h2 className="section-title">Elegí tu canción {myPicks.length + 1} de {songsPerPlayer} — {secondsLeft}s</h2>
-      <p className="info-box">{picksCount}/{totalExpectedPicks} elegidas en total</p>
+      <div className="phase-head">
+        <div>
+          <h2 className="phase-title">Elegí tu canción {myPicks.length + 1} de {songsPerPlayer}</h2>
+          <p className="phase-sub">{picksCount}/{totalExpectedPicks} elegidas en total</p>
+        </div>
+        <div className="timer-badge">
+          <strong>{secondsLeft}</strong>
+          <span>s</span>
+        </div>
+      </div>
 
-      {myPicks.length > 0 && (
-        <ul className="pick-list" style={{ marginTop: 12 }}>
-          {myPicks.map(t => (
-            <li key={t.trackId} className="pick-item">
-              <span><strong>{t.trackName}</strong> — {t.artistName}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="timer-track">
+        <div className="timer-fill" style={{ width: `${pct}%` }} />
+      </div>
 
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 22 }}>
         <input
           className="form-field"
           value={query}
@@ -162,14 +184,27 @@ export default function PickingPhase({
         />
       </div>
 
-      <ul className="track-results" style={{ marginTop: 12 }}>
+      <ul className="track-results">
         {results.map(track => (
           <li key={track.trackId} className="track-result" onClick={() => choosePick(track)}>
-            <img src={track.artworkUrl100} width={40} height={40} alt="" />
-            <span><strong>{track.trackName}</strong> — {track.artistName}</span>
+            <img src={track.artworkUrl100} width={48} height={48} alt="" />
+            <span><strong>{track.trackName}</strong> {track.artistName}</span>
           </li>
         ))}
       </ul>
+
+      {myPicks.length > 0 && (
+        <>
+          <h3 className="section-title" style={{ marginTop: 26 }}>Tus elecciones</h3>
+          <ul className="pick-list">
+            {myPicks.map(t => (
+              <li key={t.trackId} className="pick-item">
+                <span><strong>{t.trackName}</strong> — {t.artistName}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   )
 }

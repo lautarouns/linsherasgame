@@ -52,7 +52,6 @@ export default function RoundPhase({
   const advanceScheduled = useRef(false)
 
   useEffect(() => {
-    console.log('[round] nueva ronda cargando. currentRound:', currentRound, 'totalRounds:', totalRounds, 'roundDeadline:', roundDeadline)
     setCorrect(false)
     setShowWrong(false)
     setGuess('')
@@ -63,13 +62,12 @@ export default function RoundPhase({
     advanceScheduled.current = false
 
     const load = async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('rounds')
         .select('id, round_number, picks(track_name, artist, preview_url, artwork_url, player_id)')
         .eq('room_id', roomId)
         .eq('round_number', currentRound)
         .single()
-      console.log('[round] load rounds. data:', data, 'error:', error)
       if (data) setRound(data as unknown as RoundRow)
     }
     load()
@@ -106,27 +104,20 @@ export default function RoundPhase({
       }
 
       if (diff === 0 && !showReveal) {
-        console.log('[round] mostrando reveal')
         setShowReveal(true)
         audioRef.current?.pause()
       }
 
       if (diff === 0 && isHost && !advanceScheduled.current) {
-        console.log('[round] host programando avance. currentRound:', currentRound, 'totalRounds:', totalRounds)
         advanceScheduled.current = true
         setTimeout(() => {
-          console.log('[round] timeout disparado')
           if (currentRound >= totalRounds) {
-            console.log('[round] pasando a finished')
             supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
-              .then(({ error }) => console.log('[round] error finished:', error))
           } else {
-            console.log('[round] pasando a ronda', currentRound + 1)
             supabase.from('rooms').update({
               current_round: currentRound + 1,
               round_deadline: new Date(nowSynced() + ROUND_SECONDS * 1000).toISOString()
             }).eq('id', roomId)
-              .then(({ error }) => console.log('[round] error next round:', error))
           }
         }, REVEAL_SECONDS * 1000)
       }
@@ -165,47 +156,58 @@ export default function RoundPhase({
     setCorrect(true)
   }, [round, guess, playerId, correct, secondsLeft, showReveal])
 
-  if (!round) return <p>Cargando ronda...</p>
+  if (!round) return <p className="status-box">Cargando ronda...</p>
 
   const isOwnSong = round.picks.player_id === playerId
+  const pct = Math.max(0, Math.min(100, (secondsLeft / ROUND_SECONDS) * 100))
 
   if (showReveal) {
-  return (
-    <div style={{
-      minHeight: '60vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      textAlign: 'center'
-    }}>
-      <p>Ronda {currentRound} de {totalRounds}</p>
-      <img
-        src={round.picks.artwork_url}
-        width={180}
-        height={180}
-        alt=""
-        style={{ borderRadius: 12, marginTop: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
-      />
-      <h2 style={{ marginTop: 16 }}>{round.picks.track_name}</h2>
-      <p style={{ opacity: 0.8 }}>{round.picks.artist}</p>
-      {!isOwnSong && correct && <p style={{ marginTop: 8 }}>¡Acertaste! Sumaste {earned} puntos.</p>}
-      {!isOwnSong && !correct && <p style={{ marginTop: 8 }}>No la adivinaste esta vez.</p>}
-      {isOwnSong && <p style={{ marginTop: 8 }}>Era tu canción.</p>}
-    </div>
-  )
-}
+    return (
+      <div className="reveal-panel">
+        <span className="section-title" style={{ margin: 0 }}>Ronda {currentRound} de {totalRounds}</span>
+        <img className="reveal-art" src={round.picks.artwork_url} width={190} height={190} alt="" />
+        <h2 className="reveal-title">{round.picks.track_name}</h2>
+        <p className="reveal-artist">{round.picks.artist}</p>
 
-  const showHint = true
+        {!isOwnSong && correct && (
+          <div className="reveal-result">
+            ¡Acertaste! <strong>+{earned}</strong> puntos
+          </div>
+        )}
+        {!isOwnSong && !correct && (
+          <div className="reveal-result is-neutral">No la adivinaste esta vez.</div>
+        )}
+        {isOwnSong && (
+          <div className="reveal-result is-neutral">Era tu canción.</div>
+        )}
+      </div>
+    )
+  }
 
   return (
-    <div style={{ marginTop: 20 }}>
-      <p>Ronda {currentRound} de {totalRounds} — {secondsLeft}s</p>
+    <div className="room-section">
+      <div className="phase-head">
+        <span className="section-title">Ronda {currentRound} / {totalRounds}</span>
+        <div className="timer-badge">
+          <strong>{String(secondsLeft).padStart(2, '0')}</strong>
+          <span>s</span>
+        </div>
+      </div>
+
+      <div className="timer-track">
+        <div className="timer-fill" style={{ width: `${pct}%` }} />
+      </div>
+
+      <div className="hint-box">
+        <p className="hint-text">
+          {maskTitle(baseTitle(round.picks.track_name), revealedIdx)}
+        </p>
+      </div>
 
       {round.picks.preview_url && (
         <>
           <audio ref={audioRef} src={round.picks.preview_url} autoPlay />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+          <div className="volume-row">
             <span>🔊</span>
             <input
               type="range"
@@ -214,27 +216,14 @@ export default function RoundPhase({
               step={0.01}
               value={volume}
               onChange={e => setVolume(parseFloat(e.target.value))}
-              style={{ flex: 1, accentColor: '#4a9eff' }}
             />
-            <span style={{ fontSize: 13, opacity: 0.7, width: 32, textAlign: 'right' }}>
-              {Math.round(volume * 100)}%
-            </span>
+            <span className="volume-value">{Math.round(volume * 100)}%</span>
           </div>
         </>
       )}
 
-      {showHint && (
-        <div className="hint-box">
-          <p className="hint-text">
-            {maskTitle(baseTitle(round.picks.track_name), revealedIdx)}
-          </p>
-        </div>
-      )}
-
       {isOwnSong && <p className="status-box">Esta es tu canción — esperá el resultado.</p>}
-
-      {!isOwnSong && correct && <p className="status-box">¡Correcto! Sumaste {earned} puntos.</p>}
-      {!isOwnSong && !correct && showWrong && <p className="status-box">No es esa canción, seguí intentando.</p>}
+      {!isOwnSong && correct && <p className="status-box is-correct">¡Correcto! Sumaste {earned} puntos.</p>}
 
       {!isOwnSong && !correct && (
         <div className="guess-panel">
@@ -247,8 +236,9 @@ export default function RoundPhase({
               onKeyDown={e => e.key === 'Enter' && submitGuess()}
               placeholder="Nombre de la canción"
             />
-            <button onClick={submitGuess} className="btn-principal" style={{ padding: '10px 16px' }}>Adivinar</button>
+            <button onClick={submitGuess} className="btn-principal">Adivinar</button>
           </div>
+          {showWrong && <p className="status-box is-wrong">No es esa canción, seguí intentando.</p>}
         </div>
       )}
     </div>
