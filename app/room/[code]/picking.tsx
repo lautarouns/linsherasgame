@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { startPlayingPhase } from '@/lib/game'
+import { nowSynced } from '@/lib/serverTime'
 
 const SHORTENED_SECONDS = 5
 
@@ -40,7 +41,7 @@ export default function PickingPhase({
 
   useEffect(() => {
     const tick = () => {
-      const diff = Math.max(0, Math.floor((new Date(deadline).getTime() - Date.now()) / 1000))
+      const diff = Math.max(0, Math.floor((new Date(deadline).getTime() - nowSynced()) / 1000))
       setSecondsLeft(diff)
 
       if (diff === 0 && isHost && !triggered.current) {
@@ -59,7 +60,6 @@ export default function PickingPhase({
         .from('picks')
         .select('id', { count: 'exact', head: true })
         .eq('room_id', roomId)
-      console.log('[loadCount] count inicial:', count)
       setPicksCount(count ?? 0)
     }
     loadCount()
@@ -70,25 +70,14 @@ export default function PickingPhase({
         event: 'INSERT', schema: 'public', table: 'picks',
         filter: `room_id=eq.${roomId}`
       }, () => {
-        console.log('[realtime] nuevo pick insertado')
         setPicksCount(prev => prev + 1)
       })
-      .subscribe((status) => console.log('[channel status]', status))
+      .subscribe()
 
     return () => { supabase.removeChannel(channel) }
   }, [roomId])
 
   useEffect(() => {
-    console.log('[shortcut check]', {
-      isHost,
-      shortened: shortened.current,
-      totalPlayers,
-      songsPerPlayer,
-      totalExpectedPicks,
-      picksCount,
-      secondsLeft
-    })
-
     if (
       isHost &&
       !shortened.current &&
@@ -96,11 +85,9 @@ export default function PickingPhase({
       picksCount >= totalExpectedPicks &&
       secondsLeft > SHORTENED_SECONDS
     ) {
-      console.log('[shortcut] recortando tiempo a 5s')
       shortened.current = true
-      const newDeadline = new Date(Date.now() + SHORTENED_SECONDS * 1000).toISOString()
+      const newDeadline = new Date(nowSynced() + SHORTENED_SECONDS * 1000).toISOString()
       supabase.from('rooms').update({ picking_deadline: newDeadline }).eq('id', roomId)
-        .then(({ error }) => console.log('[shortcut] update terminado, error:', error))
     }
   }, [picksCount, totalExpectedPicks, isHost, secondsLeft, roomId])
 
@@ -185,4 +172,4 @@ export default function PickingPhase({
       </ul>
     </div>
   )
-} 
+}

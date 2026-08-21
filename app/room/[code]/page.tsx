@@ -7,6 +7,7 @@ import PickingPhase from './picking'
 import RoundPhase from './round'
 import Scoreboard from './scoreboard'
 import Leaderboard from './leaderboard'
+import { syncServerTime } from '@/lib/serverTime'
 
 type Room = {
   id: string
@@ -39,6 +40,11 @@ export default function RoomPage() {
 
   useEffect(() => {
     setPlayerId(localStorage.getItem('playerId'))
+  }, [])
+
+  // Sincroniza el reloj contra el servidor una vez al entrar a la sala
+  useEffect(() => {
+    syncServerTime()
   }, [])
 
   useEffect(() => {

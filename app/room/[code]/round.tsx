@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { nowSynced } from '@/lib/serverTime'
 
 const ROUND_SECONDS = 15
 const REVEAL_SECONDS = 5
@@ -88,7 +89,7 @@ export default function RoundPhase({
 
   useEffect(() => {
     const tick = () => {
-      const diff = Math.max(0, Math.ceil((new Date(roundDeadline).getTime() - Date.now()) / 1000))
+      const diff = Math.max(0, Math.ceil((new Date(roundDeadline).getTime() - nowSynced()) / 1000))
       setSecondsLeft(diff)
 
       if (!revealedOnce.current && diff <= Math.floor(ROUND_SECONDS / 2) && round) {
@@ -103,27 +104,20 @@ export default function RoundPhase({
       }
 
       if (diff === 0 && !showReveal) {
-        console.log('[round] mostrando reveal. round_number:', round?.round_number)
         setShowReveal(true)
         audioRef.current?.pause()
       }
 
       if (diff === 0 && isHost && !advanceScheduled.current) {
-        console.log('[round] host programando avance. currentRound:', currentRound, 'totalRounds:', totalRounds)
         advanceScheduled.current = true
         setTimeout(() => {
-          console.log('[round] timeout disparado. currentRound:', currentRound, 'totalRounds:', totalRounds)
           if (currentRound >= totalRounds) {
-            console.log('[round] pasando a finished')
             supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
-              .then(({ error }) => console.log('[round] error finished:', error))
           } else {
-            console.log('[round] pasando a ronda', currentRound + 1)
             supabase.from('rooms').update({
               current_round: currentRound + 1,
-              round_deadline: new Date(Date.now() + ROUND_SECONDS * 1000).toISOString()
+              round_deadline: new Date(nowSynced() + ROUND_SECONDS * 1000).toISOString()
             }).eq('id', roomId)
-              .then(({ error }) => console.log('[round] error next round:', error))
           }
         }, REVEAL_SECONDS * 1000)
       }
@@ -150,14 +144,12 @@ export default function RoundPhase({
 
     await supabase.from('guesses').insert({ round_id: round.id, player_id: playerId, is_correct: true })
 
-    const { data: player, error: playerFetchError } = await supabase.from('players').select('score, total_score').eq('id', playerId).single()
-    console.log('[submitGuess] player fetch error:', playerFetchError, 'player:', player)
+    const { data: player } = await supabase.from('players').select('score, total_score').eq('id', playerId).single()
     if (player) {
-      const { error: updateError } = await supabase.from('players').update({
+      await supabase.from('players').update({
         score: player.score + points,
         total_score: (player.total_score ?? 0) + points
       }).eq('id', playerId)
-      console.log('[submitGuess] update error:', updateError)
     }
 
     setEarned(points)
