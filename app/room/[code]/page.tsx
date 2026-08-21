@@ -58,7 +58,10 @@ export default function RoomPage() {
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'rooms',
         filter: `id=eq.${room.id}`
-      }, payload => setRoom(payload.new as Room))
+      }, payload => {
+        console.log('[realtime rooms UPDATE]', payload.new)
+        setRoom(payload.new as Room)
+      })
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'players',
         filter: `room_id=eq.${room.id}`
@@ -122,7 +125,9 @@ export default function RoomPage() {
         />
       )}
 
-      {room.status === 'finished' && <Scoreboard players={players} playerId={playerId} />}
+      {room.status === 'finished' && (
+      <Scoreboard players={players} playerId={playerId} roomId={room.id} isHost={isHost} />
+    )}
     </div>
   )
 }

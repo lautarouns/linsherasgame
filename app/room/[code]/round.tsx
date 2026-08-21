@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 
 const ROUND_SECONDS = 15
+const REVEAL_SECONDS = 5
 const BASE_POINTS = 1000
 
 type Pick = {
@@ -43,9 +44,11 @@ export default function RoundPhase({
   const [correct, setCorrect] = useState(false)
   const [showWrong, setShowWrong] = useState(false)
   const [earned, setEarned] = useState<number | null>(null)
+  const [showReveal, setShowReveal] = useState(false)
+  const [volume, setVolume] = useState(0.7)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const revealedOnce = useRef(false)
-  const advancedOnce = useRef(false)
+  const advanceScheduled = useRef(false)
 
   useEffect(() => {
     setCorrect(false)
@@ -53,8 +56,9 @@ export default function RoundPhase({
     setGuess('')
     setRevealedIdx(new Set())
     setEarned(null)
+    setShowReveal(false)
     revealedOnce.current = false
-    advancedOnce.current = false
+    advanceScheduled.current = false
 
     const load = async () => {
       const { data } = await supabase
@@ -75,6 +79,13 @@ export default function RoundPhase({
     }
   }, [round])
 
+  // Mantiene el volumen elegido cada vez que arranca una canción nueva
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume
+    }
+  }, [volume, round])
+
   useEffect(() => {
     const tick = () => {
       const diff = Math.max(0, Math.ceil((new Date(roundDeadline).getTime() - Date.now()) / 1000))
@@ -91,25 +102,32 @@ export default function RoundPhase({
         setRevealedIdx(new Set(shuffled.slice(0, 2)))
       }
 
-      if (diff === 0 && isHost && !advancedOnce.current) {
-        advancedOnce.current = true
-        if (currentRound >= totalRounds) {
-          supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
-        } else {
-          supabase.from('rooms').update({
-            current_round: currentRound + 1,
-            round_deadline: new Date(Date.now() + ROUND_SECONDS * 1000).toISOString()
-          }).eq('id', roomId)
-        }
+      if (diff === 0 && !showReveal) {
+        setShowReveal(true)
+        audioRef.current?.pause()
+      }
+
+      if (diff === 0 && isHost && !advanceScheduled.current) {
+        advanceScheduled.current = true
+        setTimeout(() => {
+          if (currentRound >= totalRounds) {
+            supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
+          } else {
+            supabase.from('rooms').update({
+              current_round: currentRound + 1,
+              round_deadline: new Date(Date.now() + ROUND_SECONDS * 1000).toISOString()
+            }).eq('id', roomId)
+          }
+        }, REVEAL_SECONDS * 1000)
       }
     }
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [roundDeadline, round, isHost, currentRound, totalRounds, roomId])
+  }, [roundDeadline, round, isHost, currentRound, totalRounds, roomId, showReveal])
 
   const submitGuess = useCallback(async () => {
-    if (!round || correct || !guess.trim()) return
+    if (!round || correct || !guess.trim() || showReveal) return
     if (round.picks.player_id === playerId) return
 
     const isCorrect = normalize(guess) === normalize(baseTitle(round.picks.track_name))
@@ -132,18 +150,58 @@ export default function RoundPhase({
 
     setEarned(points)
     setCorrect(true)
-  }, [round, guess, playerId, correct, secondsLeft])
+  }, [round, guess, playerId, correct, secondsLeft, showReveal])
 
   if (!round) return <p>Cargando ronda...</p>
 
   const isOwnSong = round.picks.player_id === playerId
-  const showHint = revealedIdx.size > 0
+
+  if (showReveal) {
+    return (
+      <div style={{ marginTop: 20, textAlign: 'center' }}>
+        <p>Ronda {currentRound} de {totalRounds}</p>
+        <img
+          src={round.picks.artwork_url}
+          width={120}
+          height={120}
+          alt=""
+          style={{ borderRadius: 8, marginTop: 12 }}
+        />
+        <h2 style={{ marginTop: 12 }}>{round.picks.track_name}</h2>
+        <p style={{ opacity: 0.8 }}>{round.picks.artist}</p>
+        {!isOwnSong && correct && <p style={{ marginTop: 8 }}>¡Acertaste! Sumaste {earned} puntos.</p>}
+        {!isOwnSong && !correct && <p style={{ marginTop: 8 }}>No la adivinaste esta vez.</p>}
+        {isOwnSong && <p style={{ marginTop: 8 }}>Era tu canción.</p>}
+      </div>
+    )
+  }
+
+  const showHint = true
 
   return (
     <div style={{ marginTop: 20 }}>
       <p>Ronda {currentRound} de {totalRounds} — {secondsLeft}s</p>
 
-      {round.picks.preview_url && <audio ref={audioRef} src={round.picks.preview_url} autoPlay />}
+      {round.picks.preview_url && (
+        <>
+          <audio ref={audioRef} src={round.picks.preview_url} autoPlay />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+            <span>🔊</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={volume}
+              onChange={e => setVolume(parseFloat(e.target.value))}
+              style={{ flex: 1, accentColor: '#4a9eff' }}
+            />
+            <span style={{ fontSize: 13, opacity: 0.7, width: 32, textAlign: 'right' }}>
+              {Math.round(volume * 100)}%
+            </span>
+          </div>
+        </>
+      )}
 
       {showHint && (
         <p style={{ letterSpacing: 2, fontFamily: 'monospace', fontSize: 20 }}>

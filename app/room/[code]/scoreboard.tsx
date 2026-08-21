@@ -1,4 +1,6 @@
 'use client'
+import { useRouter } from 'next/navigation'
+import { resetGame } from '@/lib/game'
 
 type Player = {
   id: string
@@ -8,11 +10,16 @@ type Player = {
 
 export default function Scoreboard({
   players,
-  playerId
+  playerId,
+  roomId,
+  isHost
 }: {
   players: Player[]
   playerId: string
+  roomId: string
+  isHost: boolean
 }) {
+  const router = useRouter()
   const sorted = [...players].sort((a, b) => b.score - a.score)
 
   return (
@@ -40,6 +47,28 @@ export default function Scoreboard({
           </li>
         ))}
       </ol>
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
+        <button
+          onClick={() => router.push('/')}
+          style={{ flex: 1, padding: 10 }}
+        >
+          Salir al menú
+        </button>
+
+        {isHost ? (
+          <button
+            onClick={() => resetGame(roomId)}
+            style={{ flex: 1, padding: 10 }}
+          >
+            Jugar de nuevo
+          </button>
+        ) : (
+          <p style={{ flex: 1, textAlign: 'center', fontSize: 13, opacity: 0.7 }}>
+            Esperando al host para jugar de nuevo...
+          </p>
+        )}
+      </div>
     </div>
   )
 }

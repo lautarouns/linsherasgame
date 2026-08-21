@@ -57,6 +57,7 @@ export default function PickingPhase({
         .from('picks')
         .select('id', { count: 'exact', head: true })
         .eq('room_id', roomId)
+      console.log('[loadCount] count inicial:', count)
       setPicksCount(count ?? 0)
     }
     loadCount()
@@ -66,26 +67,41 @@ export default function PickingPhase({
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'picks',
         filter: `room_id=eq.${roomId}`
-      }, () => setPicksCount(prev => prev + 1))
-      .subscribe()
+      }, () => {
+        console.log('[realtime] nuevo pick insertado, sumando al contador')
+        setPicksCount(prev => prev + 1)
+      })
+      .subscribe((status) => {
+        console.log('[channel status]', status)
+      })
 
     return () => { supabase.removeChannel(channel) }
   }, [roomId])
 
   // Cuando todos eligieron, el host recorta el tiempo restante a 5s
   useEffect(() => {
-    if (
-      isHost &&
-      !shortened.current &&
-      totalPlayers > 0 &&
-      picksCount >= totalPlayers &&
-      secondsLeft > SHORTENED_SECONDS
-    ) {
-      shortened.current = true
-      const newDeadline = new Date(Date.now() + SHORTENED_SECONDS * 1000).toISOString()
-      supabase.from('rooms').update({ picking_deadline: newDeadline }).eq('id', roomId)
-    }
-  }, [picksCount, totalPlayers, isHost, secondsLeft, roomId])
+  console.log('[shortcut check]', {
+    isHost,
+    shortened: shortened.current,
+    totalPlayers,
+    picksCount,
+    secondsLeft
+  })
+
+  if (
+    isHost &&
+    !shortened.current &&
+    totalPlayers > 0 &&
+    picksCount >= totalPlayers &&
+    secondsLeft > SHORTENED_SECONDS
+  ) {
+    console.log('[shortcut] recortando tiempo a 5s')
+    shortened.current = true
+    const newDeadline = new Date(Date.now() + SHORTENED_SECONDS * 1000).toISOString()
+    supabase.from('rooms').update({ picking_deadline: newDeadline }).eq('id', roomId)
+      .then(({ error }) => console.log('[shortcut] update terminado, error:', error))
+  }
+}, [picksCount, totalPlayers, isHost, secondsLeft, roomId])
 
   // Búsqueda en iTunes con debounce (espera 350ms sin tipeo antes de buscar)
   useEffect(() => {

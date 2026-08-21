@@ -42,3 +42,25 @@ export async function startPlayingPhase(roomId: string, roundSeconds = 15) {
     round_deadline: new Date(Date.now() + roundSeconds * 1000).toISOString()
   }).eq('id', roomId)
 }
+export async function resetGame(roomId: string) {
+  const { data: rounds } = await supabase
+    .from('rounds')
+    .select('id')
+    .eq('room_id', roomId)
+
+  const roundIds = rounds?.map(r => r.id) ?? []
+  if (roundIds.length > 0) {
+    await supabase.from('guesses').delete().in('round_id', roundIds)
+  }
+
+  await supabase.from('rounds').delete().eq('room_id', roomId)
+  await supabase.from('picks').delete().eq('room_id', roomId)
+  await supabase.from('players').update({ score: 0 }).eq('room_id', roomId)
+
+  await supabase.from('rooms').update({
+    status: 'lobby',
+    picking_deadline: null,
+    current_round: 0,
+    round_deadline: null
+  }).eq('id', roomId)
+}
