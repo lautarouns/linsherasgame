@@ -1,7 +1,8 @@
 import { supabase } from './supabase'
+import { nowSynced } from './serverTime'
 
 export async function startPickingPhase(roomId: string, songsPerPlayer = 1, seconds = 45) {
-  const deadline = new Date(Date.now() + seconds * 1000).toISOString()
+  const deadline = new Date(nowSynced() + seconds * 1000).toISOString()
   await supabase
     .from('rooms')
     .update({ status: 'picking', picking_deadline: deadline, songs_per_player: songsPerPlayer })
@@ -38,7 +39,7 @@ export async function startPlayingPhase(roomId: string, roundSeconds = 15) {
     status: 'playing',
     current_round: 1,
     total_rounds: rows.length,
-    round_deadline: new Date(Date.now() + roundSeconds * 1000).toISOString()
+    round_deadline: new Date(nowSynced() + roundSeconds * 1000).toISOString()
   }).eq('id', roomId)
 }
 
@@ -56,7 +57,6 @@ export async function resetGame(roomId: string) {
   await supabase.from('rounds').delete().eq('room_id', roomId)
   await supabase.from('picks').delete().eq('room_id', roomId)
   await supabase.from('players').update({ score: 0 }).eq('room_id', roomId)
-  
 
   await supabase.from('rooms').update({
     status: 'lobby',

@@ -170,24 +170,31 @@ export default function RoundPhase({
   const isOwnSong = round.picks.player_id === playerId
 
   if (showReveal) {
-    return (
-      <div style={{ marginTop: 20, textAlign: 'center' }}>
-        <p>Ronda {currentRound} de {totalRounds}</p>
-        <img
-          src={round.picks.artwork_url}
-          width={120}
-          height={120}
-          alt=""
-          style={{ borderRadius: 8, marginTop: 12 }}
-        />
-        <h2 style={{ marginTop: 12 }}>{round.picks.track_name}</h2>
-        <p style={{ opacity: 0.8 }}>{round.picks.artist}</p>
-        {!isOwnSong && correct && <p style={{ marginTop: 8 }}>¡Acertaste! Sumaste {earned} puntos.</p>}
-        {!isOwnSong && !correct && <p style={{ marginTop: 8 }}>No la adivinaste esta vez.</p>}
-        {isOwnSong && <p style={{ marginTop: 8 }}>Era tu canción.</p>}
-      </div>
-    )
-  }
+  return (
+    <div style={{
+      minHeight: '60vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      textAlign: 'center'
+    }}>
+      <p>Ronda {currentRound} de {totalRounds}</p>
+      <img
+        src={round.picks.artwork_url}
+        width={180}
+        height={180}
+        alt=""
+        style={{ borderRadius: 12, marginTop: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
+      />
+      <h2 style={{ marginTop: 16 }}>{round.picks.track_name}</h2>
+      <p style={{ opacity: 0.8 }}>{round.picks.artist}</p>
+      {!isOwnSong && correct && <p style={{ marginTop: 8 }}>¡Acertaste! Sumaste {earned} puntos.</p>}
+      {!isOwnSong && !correct && <p style={{ marginTop: 8 }}>No la adivinaste esta vez.</p>}
+      {isOwnSong && <p style={{ marginTop: 8 }}>Era tu canción.</p>}
+    </div>
+  )
+}
 
   const showHint = true
 
