@@ -6,6 +6,7 @@ import { startPickingPhase } from '@/lib/game'
 import PickingPhase from './picking'
 import RoundPhase from './round'
 import Scoreboard from './scoreboard'
+import Leaderboard from './leaderboard'
 
 type Room = {
   id: string
@@ -14,12 +15,15 @@ type Room = {
   picking_deadline: string | null
   current_round: number
   round_deadline: string | null
+  songs_per_player: number
+  total_rounds: number
 }
 
 type Player = {
   id: string
   nickname: string
   score: number
+  total_score: number
   created_at: string
 }
 
@@ -31,6 +35,7 @@ export default function RoomPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [playerId, setPlayerId] = useState<string | null>(null)
   const [onlinePlayerIds, setOnlinePlayerIds] = useState<Set<string>>(new Set())
+  const [songsPerPlayer, setSongsPerPlayer] = useState(1)
 
   useEffect(() => {
     setPlayerId(localStorage.getItem('playerId'))
@@ -106,51 +111,75 @@ export default function RoomPage() {
   const isHost = onlinePlayers.length > 0 && onlinePlayers[0].id === playerId
 
   return (
-    <div style={{ padding: 40, maxWidth: 500, margin: '0 auto' }}>
-      <h1>Sala {room.code}</h1>
+    <div style={{ display: 'flex', justifyContent: 'center', gap: 32, padding: 40 }}>
+      <div style={{ maxWidth: 500, width: '100%' }}>
+        <h1>Sala {room.code}</h1>
 
-      {room.status === 'lobby' && (
-        <>
-          <h3>Jugadores ({onlinePlayers.length})</h3>
-          <ul>
-            {onlinePlayers.map(p => (
-              <li key={p.id}>{p.nickname}{p.id === playerId ? ' (vos)' : ''}</li>
-            ))}
-          </ul>
+        {room.status === 'lobby' && (
+          <>
+            <h3>Jugadores ({onlinePlayers.length})</h3>
+            <ul>
+              {onlinePlayers.map(p => (
+                <li key={p.id}>{p.nickname}{p.id === playerId ? ' (vos)' : ''}</li>
+              ))}
+            </ul>
 
-          {isHost && (
-            <button onClick={() => startPickingPhase(room.id)} style={{ padding: 10, marginTop: 20 }}>
-              Iniciar juego
-            </button>
-          )}
-          {!isHost && <p>Esperando a que el host inicie el juego...</p>}
-        </>
-      )}
+            {isHost && (
+              <>
+                <div style={{ marginTop: 16 }}>
+                  <label>
+                    Canciones por jugador:{' '}
+                    <select
+                      value={songsPerPlayer}
+                      onChange={e => setSongsPerPlayer(Number(e.target.value))}
+                      style={{ padding: 4 }}
+                    >
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <button
+                  onClick={() => startPickingPhase(room.id, songsPerPlayer)}
+                  style={{ padding: 10, marginTop: 12 }}
+                >
+                  Iniciar juego
+                </button>
+              </>
+            )}
+            {!isHost && <p>Esperando a que el host inicie el juego...</p>}
+          </>
+        )}
 
-      {room.status === 'picking' && room.picking_deadline && (
-        <PickingPhase
-          roomId={room.id}
-          playerId={playerId}
-          deadline={room.picking_deadline}
-          isHost={isHost}
-          totalPlayers={onlinePlayers.length}
-        />
-      )}
+        {room.status === 'picking' && room.picking_deadline && (
+          <PickingPhase
+            roomId={room.id}
+            playerId={playerId}
+            deadline={room.picking_deadline}
+            isHost={isHost}
+            totalPlayers={onlinePlayers.length}
+            songsPerPlayer={room.songs_per_player}
+          />
+        )}
 
-      {room.status === 'playing' && room.round_deadline && (
-        <RoundPhase
-          roomId={room.id}
-          playerId={playerId}
-          currentRound={room.current_round}
-          roundDeadline={room.round_deadline}
-          isHost={isHost}
-          totalRounds={onlinePlayers.length}
-        />
-      )}
+        {room.status === 'playing' && room.round_deadline && (
+          <RoundPhase
+            roomId={room.id}
+            playerId={playerId}
+            currentRound={room.current_round}
+            roundDeadline={room.round_deadline}
+            isHost={isHost}
+            totalRounds={room.total_rounds}
+          />
+        )}
 
-      {room.status === 'finished' && (
-        <Scoreboard players={players} playerId={playerId} roomId={room.id} isHost={isHost} />
-      )}
+        {room.status === 'finished' && (
+          <Scoreboard players={players} playerId={playerId} roomId={room.id} isHost={isHost} />
+        )}
+      </div>
+
+      <Leaderboard players={players} playerId={playerId} />
     </div>
   )
 }

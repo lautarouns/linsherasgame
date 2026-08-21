@@ -1,16 +1,14 @@
 import { supabase } from './supabase'
 
-export async function startPickingPhase(roomId: string, seconds = 45) {
+export async function startPickingPhase(roomId: string, songsPerPlayer = 1, seconds = 45) {
   const deadline = new Date(Date.now() + seconds * 1000).toISOString()
   await supabase
     .from('rooms')
-    .update({ status: 'picking', picking_deadline: deadline })
+    .update({ status: 'picking', picking_deadline: deadline, songs_per_player: songsPerPlayer })
     .eq('id', roomId)
 }
 
 export async function startPlayingPhase(roomId: string, roundSeconds = 15) {
-  // Evita duplicar rondas si esta función se dispara más de una vez
-  // (puede pasar por React StrictMode en desarrollo, o por una carrera entre pestañas)
   const { data: existingRounds } = await supabase
     .from('rounds')
     .select('id')
@@ -39,9 +37,11 @@ export async function startPlayingPhase(roomId: string, roundSeconds = 15) {
   await supabase.from('rooms').update({
     status: 'playing',
     current_round: 1,
+    total_rounds: rows.length,
     round_deadline: new Date(Date.now() + roundSeconds * 1000).toISOString()
   }).eq('id', roomId)
 }
+
 export async function resetGame(roomId: string) {
   const { data: rounds } = await supabase
     .from('rounds')
@@ -56,11 +56,13 @@ export async function resetGame(roomId: string) {
   await supabase.from('rounds').delete().eq('room_id', roomId)
   await supabase.from('picks').delete().eq('room_id', roomId)
   await supabase.from('players').update({ score: 0 }).eq('room_id', roomId)
+  
 
   await supabase.from('rooms').update({
     status: 'lobby',
     picking_deadline: null,
     current_round: 0,
-    round_deadline: null
+    round_deadline: null,
+    total_rounds: 0
   }).eq('id', roomId)
 }

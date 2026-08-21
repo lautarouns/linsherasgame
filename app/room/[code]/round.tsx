@@ -103,7 +103,7 @@ export default function RoundPhase({
       }
 
       if (diff === 0 && !showReveal) {
-        console.log('[round] mostrando reveal')
+        console.log('[round] mostrando reveal. round_number:', round?.round_number)
         setShowReveal(true)
         audioRef.current?.pause()
       }
@@ -112,7 +112,7 @@ export default function RoundPhase({
         console.log('[round] host programando avance. currentRound:', currentRound, 'totalRounds:', totalRounds)
         advanceScheduled.current = true
         setTimeout(() => {
-          console.log('[round] timeout disparado')
+          console.log('[round] timeout disparado. currentRound:', currentRound, 'totalRounds:', totalRounds)
           if (currentRound >= totalRounds) {
             console.log('[round] pasando a finished')
             supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
@@ -150,9 +150,14 @@ export default function RoundPhase({
 
     await supabase.from('guesses').insert({ round_id: round.id, player_id: playerId, is_correct: true })
 
-    const { data: player } = await supabase.from('players').select('score').eq('id', playerId).single()
+    const { data: player, error: playerFetchError } = await supabase.from('players').select('score, total_score').eq('id', playerId).single()
+    console.log('[submitGuess] player fetch error:', playerFetchError, 'player:', player)
     if (player) {
-      await supabase.from('players').update({ score: player.score + points }).eq('id', playerId)
+      const { error: updateError } = await supabase.from('players').update({
+        score: player.score + points,
+        total_score: (player.total_score ?? 0) + points
+      }).eq('id', playerId)
+      console.log('[submitGuess] update error:', updateError)
     }
 
     setEarned(points)

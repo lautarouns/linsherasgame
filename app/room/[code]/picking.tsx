@@ -18,23 +18,26 @@ export default function PickingPhase({
   playerId,
   deadline,
   isHost,
-  totalPlayers
+  totalPlayers,
+  songsPerPlayer
 }: {
   roomId: string
   playerId: string
   deadline: string
   isHost: boolean
   totalPlayers: number
+  songsPerPlayer: number
 }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Track[]>([])
-  const [picked, setPicked] = useState<Track | null>(null)
+  const [myPicks, setMyPicks] = useState<Track[]>([])
   const [secondsLeft, setSecondsLeft] = useState(0)
   const [picksCount, setPicksCount] = useState(0)
   const triggered = useRef(false)
   const shortened = useRef(false)
 
-  // Timer sincronizado contra el deadline guardado en la sala (servidor)
+  const totalExpectedPicks = totalPlayers * songsPerPlayer
+
   useEffect(() => {
     const tick = () => {
       const diff = Math.max(0, Math.floor((new Date(deadline).getTime() - Date.now()) / 1000))
@@ -50,7 +53,6 @@ export default function PickingPhase({
     return () => clearInterval(interval)
   }, [deadline, isHost, roomId])
 
-  // Cuenta inicial de picks ya hechos, más suscripción en vivo a nuevos picks
   useEffect(() => {
     const loadCount = async () => {
       const { count } = await supabase
@@ -68,42 +70,40 @@ export default function PickingPhase({
         event: 'INSERT', schema: 'public', table: 'picks',
         filter: `room_id=eq.${roomId}`
       }, () => {
-        console.log('[realtime] nuevo pick insertado, sumando al contador')
+        console.log('[realtime] nuevo pick insertado')
         setPicksCount(prev => prev + 1)
       })
-      .subscribe((status) => {
-        console.log('[channel status]', status)
-      })
+      .subscribe((status) => console.log('[channel status]', status))
 
     return () => { supabase.removeChannel(channel) }
   }, [roomId])
 
-  // Cuando todos eligieron, el host recorta el tiempo restante a 5s
   useEffect(() => {
-  console.log('[shortcut check]', {
-    isHost,
-    shortened: shortened.current,
-    totalPlayers,
-    picksCount,
-    secondsLeft
-  })
+    console.log('[shortcut check]', {
+      isHost,
+      shortened: shortened.current,
+      totalPlayers,
+      songsPerPlayer,
+      totalExpectedPicks,
+      picksCount,
+      secondsLeft
+    })
 
-  if (
-    isHost &&
-    !shortened.current &&
-    totalPlayers > 0 &&
-    picksCount >= totalPlayers &&
-    secondsLeft > SHORTENED_SECONDS
-  ) {
-    console.log('[shortcut] recortando tiempo a 5s')
-    shortened.current = true
-    const newDeadline = new Date(Date.now() + SHORTENED_SECONDS * 1000).toISOString()
-    supabase.from('rooms').update({ picking_deadline: newDeadline }).eq('id', roomId)
-      .then(({ error }) => console.log('[shortcut] update terminado, error:', error))
-  }
-}, [picksCount, totalPlayers, isHost, secondsLeft, roomId])
+    if (
+      isHost &&
+      !shortened.current &&
+      totalExpectedPicks > 0 &&
+      picksCount >= totalExpectedPicks &&
+      secondsLeft > SHORTENED_SECONDS
+    ) {
+      console.log('[shortcut] recortando tiempo a 5s')
+      shortened.current = true
+      const newDeadline = new Date(Date.now() + SHORTENED_SECONDS * 1000).toISOString()
+      supabase.from('rooms').update({ picking_deadline: newDeadline }).eq('id', roomId)
+        .then(({ error }) => console.log('[shortcut] update terminado, error:', error))
+    }
+  }, [picksCount, totalExpectedPicks, isHost, secondsLeft, roomId])
 
-  // Búsqueda en iTunes con debounce (espera 350ms sin tipeo antes de buscar)
   useEffect(() => {
     if (query.length < 2) {
       setResults([])
@@ -120,7 +120,9 @@ export default function PickingPhase({
   }, [query])
 
   const choosePick = useCallback(async (track: Track) => {
-    setPicked(track)
+    setMyPicks(prev => [...prev, track])
+    setQuery('')
+    setResults([])
     await supabase.from('picks').insert({
       room_id: roomId,
       player_id: playerId,
@@ -131,19 +133,35 @@ export default function PickingPhase({
     })
   }, [roomId, playerId])
 
-  if (picked) {
+  const doneWithMine = myPicks.length >= songsPerPlayer
+
+  if (doneWithMine) {
     return (
       <div style={{ marginTop: 20 }}>
-        <p>Elegiste: <strong>{picked.trackName}</strong> — {picked.artistName}</p>
-        <p>Esperando a los demás... {secondsLeft}s ({picksCount}/{totalPlayers})</p>
+        <p>Elegiste tus {songsPerPlayer} canciones:</p>
+        <ul style={{ paddingLeft: 18 }}>
+          {myPicks.map(t => (
+            <li key={t.trackId}>{t.trackName} — {t.artistName}</li>
+          ))}
+        </ul>
+        <p>Esperando a los demás... {secondsLeft}s ({picksCount}/{totalExpectedPicks})</p>
       </div>
     )
   }
 
   return (
     <div style={{ marginTop: 20 }}>
-      <h2>Elegí tu canción — {secondsLeft}s</h2>
-      <p style={{ fontSize: 13, opacity: 0.7 }}>{picksCount}/{totalPlayers} ya eligieron</p>
+      <h2>Elegí tu canción {myPicks.length + 1} de {songsPerPlayer} — {secondsLeft}s</h2>
+      <p style={{ fontSize: 13, opacity: 0.7 }}>{picksCount}/{totalExpectedPicks} elegidas en total</p>
+
+      {myPicks.length > 0 && (
+        <ul style={{ paddingLeft: 18, fontSize: 13, opacity: 0.8 }}>
+          {myPicks.map(t => (
+            <li key={t.trackId}>{t.trackName} — {t.artistName}</li>
+          ))}
+        </ul>
+      )}
+
       <input
         value={query}
         onChange={e => setQuery(e.target.value)}
@@ -171,4 +189,4 @@ export default function PickingPhase({
       </ul>
     </div>
   )
-}
+} 
