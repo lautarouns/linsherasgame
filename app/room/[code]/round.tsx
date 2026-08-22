@@ -5,7 +5,9 @@ import { nowSynced } from '@/lib/serverTime'
 
 const ROUND_SECONDS = 15
 const REVEAL_SECONDS = 5
-const BASE_POINTS = 1000
+const BASE_POINTS = 100
+const MIN_GUESS_POINTS = 10
+const OWNER_POINTS_PER_CORRECT_GUESS = 15
 
 type Pick = {
   track_name: string
@@ -104,27 +106,20 @@ export default function RoundPhase({
       }
 
       if (diff === 0 && !showReveal) {
-        console.log('[round] mostrando reveal')
         setShowReveal(true)
         audioRef.current?.pause()
       }
 
       if (diff === 0 && isHost && !advanceScheduled.current) {
-        console.log('[round] host programando avance en', REVEAL_SECONDS, 's. currentRound:', currentRound, 'totalRounds:', totalRounds)
         advanceScheduled.current = true
         setTimeout(() => {
-          console.log('[round] timeout DISPARADO')
           if (currentRound >= totalRounds) {
-            console.log('[round] update a finished...')
             supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
-              .then(({ error }) => console.log('[round] resultado update finished, error:', error))
           } else {
-            console.log('[round] update a ronda', currentRound + 1)
             supabase.from('rooms').update({
               current_round: currentRound + 1,
               round_deadline: new Date(nowSynced() + ROUND_SECONDS * 1000).toISOString()
             }).eq('id', roomId)
-              .then(({ error }) => console.log('[round] resultado update next round, error:', error))
           }
         }, REVEAL_SECONDS * 1000)
       }
@@ -146,17 +141,30 @@ export default function RoundPhase({
       return
     }
 
+    // Puntos del que adivina: escala 0-100 según lo rápido que contestó
     const elapsedMs = (ROUND_SECONDS - secondsLeft) * 1000
-    const points = Math.max(50, Math.round(BASE_POINTS * (1 - elapsedMs / (ROUND_SECONDS * 1000))))
+    const points = Math.max(
+      MIN_GUESS_POINTS,
+      Math.round(BASE_POINTS * (1 - elapsedMs / (ROUND_SECONDS * 1000)))
+    )
 
     await supabase.from('guesses').insert({ round_id: round.id, player_id: playerId, is_correct: true })
 
-    const { data: player } = await supabase.from('players').select('score, total_score').eq('id', playerId).single()
-    if (player) {
+    const { data: guesser } = await supabase.from('players').select('score, total_score').eq('id', playerId).single()
+    if (guesser) {
       await supabase.from('players').update({
-        score: player.score + points,
-        total_score: (player.total_score ?? 0) + points
+        score: guesser.score + points,
+        total_score: (guesser.total_score ?? 0) + points
       }).eq('id', playerId)
+    }
+
+    // El dueño de la canción suma 15 puntos por cada acierto que recibe
+    const { data: owner } = await supabase.from('players').select('score, total_score').eq('id', round.picks.player_id).single()
+    if (owner) {
+      await supabase.from('players').update({
+        score: owner.score + OWNER_POINTS_PER_CORRECT_GUESS,
+        total_score: (owner.total_score ?? 0) + OWNER_POINTS_PER_CORRECT_GUESS
+      }).eq('id', round.picks.player_id)
     }
 
     setEarned(points)
