@@ -81,6 +81,8 @@ export default function PickingPhase({
   }, [roomId])
 
   useEffect(() => {
+    console.log('shortcut check:', { isHost, picksCount, totalExpectedPicks, secondsLeft, shortened: shortened.current })
+
     if (
       isHost &&
       !shortened.current &&
@@ -91,6 +93,7 @@ export default function PickingPhase({
       shortened.current = true
       const newDeadline = new Date(nowSynced() + SHORTENED_SECONDS * 1000).toISOString()
       supabase.from('rooms').update({ picking_deadline: newDeadline }).eq('id', roomId)
+        .then(({ error }) => console.log('shortcut update error:', error))
     }
   }, [picksCount, totalExpectedPicks, isHost, secondsLeft, roomId])
 
