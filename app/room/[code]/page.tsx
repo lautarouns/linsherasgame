@@ -7,6 +7,7 @@ import PickingPhase from './picking'
 import RoundPhase from './round'
 import Scoreboard from './scoreboard'
 import Leaderboard from './leaderboard'
+import ChatIsland from './ChatIsland'
 import { syncServerTime } from '@/lib/serverTime'
 
 type Room = {
@@ -126,9 +127,11 @@ export default function RoomPage() {
   const onlinePlayers = players.filter(p => onlinePlayerIds.has(p.id))
   const hostPlayerId = players[0]?.id ?? null
   const isHost = hostPlayerId === playerId
+  const currentPlayer = players.find(p => p.id === playerId) ?? null
 
   return (
     <div className="room-shell">
+      <ChatIsland roomId={room.id} playerId={playerId} nickname={currentPlayer?.nickname} />
       <div className="room-panel">
         <div className="room-header">
           <div>

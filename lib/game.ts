@@ -56,7 +56,9 @@ export async function resetGame(roomId: string) {
 
   await supabase.from('rounds').delete().eq('room_id', roomId)
   await supabase.from('picks').delete().eq('room_id', roomId)
-  await supabase.from('players').update({ score: 0 }).eq('room_id', roomId)
+  
+  // ACÁ ESTÁ EL ARREGLO: Agregamos current_streak: 0
+  await supabase.from('players').update({ score: 0, current_streak: 0 }).eq('room_id', roomId)
 
   await supabase.from('rooms').update({
     status: 'lobby',

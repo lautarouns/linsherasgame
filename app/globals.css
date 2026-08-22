@@ -1,6 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
-
+@import "tailwindcss";
 :root {
   --background: #08080a;
   --foreground: #f2f0ec;
@@ -219,7 +218,7 @@ select {
   width: 100%;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 290px;
+  grid-template-columns: 320px minmax(0, 1fr) 290px;
   align-items: start;
   gap: 22px;
   padding: 34px 20px 72px;
@@ -542,6 +541,61 @@ select {
   padding: 22px 20px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
 }
+
+/* Chat island (columna izquierda) */
+.chat-island {
+  min-width: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
+  border: 1px solid var(--panel-border);
+  border-radius: 24px;
+  padding: 18px 16px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-header {
+  font-family: var(--font-code);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(242, 240, 236, 0.45);
+}
+
+.chat-messages {
+  min-height: 220px;
+  max-height: 520px;
+  overflow: auto;
+  padding: 6px;
+}
+
+.chat-row {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--table-row);
+  border: 1px solid var(--soft);
+  margin-bottom: 8px;
+}
+
+.chat-input-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chat-input {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--soft-strong);
+  background: var(--field-bg);
+  color: var(--foreground);
+  font-size: 14px;
+  flex: 1;
+}
+
+.chat-input::placeholder { color: rgba(242, 240, 236, 0.34); }
 
 .sidebar-title {
   margin: 0 0 16px;
@@ -917,4 +971,48 @@ select {
 
 .form-row {
   margin-top: 0;
+}
+
+/* ---------- Footer ---------- */
+.app-footer {
+  /* fixed to viewport bottom so it's always visible */
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 18px;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  max-width: 1140px;
+  width: min(1140px, calc(100% - 40px));
+  box-shadow: 0 18px 40px rgba(0,0,0,0.32);
+  z-index: 1000;
+}
+
+.app-footer-inner {
+  font-family: var(--font-code);
+  letter-spacing: 0.12em;
+  text-transform: none;
+  color: rgba(242,240,236,0.62);
+  font-weight: 600;
+}
+
+/* reserve space so content isn't hidden under the fixed footer */
+.app-main {
+  padding-bottom: 92px; /* should be >= footer height + bottom offset */
+}
+
+@media (max-width: 900px) {
+  .app-main { padding-bottom: 110px; }
+}
+
+@media (max-width: 600px) {
+  .app-footer { width: calc(100% - 28px); padding: 10px 14px; font-size: 12px; border-radius: 12px; bottom: 12px; }
+  .app-main { padding-bottom: 82px; }
 }

@@ -23,7 +23,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <main className="app-main flex-grow">{children}</main>
+
+        <footer className="app-footer" role="contentinfo">
+          <div className="app-footer-inner">by Hydrox and AmazingApple</div>
+        </footer>
+      </body>
     </html>
   );
 }

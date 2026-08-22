@@ -6,6 +6,7 @@ type Player = {
   id: string
   nickname: string
   score: number
+  current_streak?: number // Agregamos la nueva columna acá
 }
 
 export default function Scoreboard({
@@ -32,7 +33,10 @@ export default function Scoreboard({
         {sorted.map((p, i) => (
           <li key={p.id} className="score-row">
             <span>
-              <strong>#{i + 1} {p.nickname}{p.id === playerId ? ' (vos)' : ''}</strong>
+              <strong>
+                #{i + 1} {p.nickname}{p.id === playerId ? ' (vos)' : ''}
+                {p.current_streak && p.current_streak >= 3 ? ' 🔥' : ''} 
+              </strong>
               {i === 0 ? ' 🏆' : ''}
             </span>
             <span className="score-meta">{p.score} pts</span>

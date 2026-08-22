@@ -27,15 +27,12 @@ function baseTitle(trackName: string) {
   return trackName.split('(')[0].split('[')[0].trim()
 }
 
-// Elige qué posiciones (índices globales sobre el título) se revelan:
-// - 1 sola palabra -> 2 letras de esa palabra
-// - 2+ palabras -> 1 letra por cada palabra
 function pickRevealIndices(title: string): number[] {
   const words: { start: number; text: string }[] = []
   let idx = 0
   title.split(' ').forEach(w => {
     words.push({ start: idx, text: w })
-    idx += w.length + 1 // +1 por el espacio que separa palabras
+    idx += w.length + 1
   })
 
   const letterPositions = (word: { start: number; text: string }) =>
@@ -66,7 +63,7 @@ function maskTitle(title: string, revealed: Set<number>) {
   return title
     .split('')
     .map((ch, i) => {
-      if (ch === ' ') return '   ' // espacio extra para que se note el corte de palabra
+      if (ch === ' ') return '   '
       if (!/[a-zA-Z0-9]/.test(ch)) return ch
       return revealed.has(i) ? ch : '_'
     })
@@ -91,6 +88,8 @@ export default function RoundPhase({
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const revealedOnce = useRef(false)
   const advanceScheduled = useRef(false)
+  const streakBroken = useRef(false) 
+  const isSubmitting = useRef(false) // NUEVO: Candado para evitar el doble puntaje
 
   useEffect(() => {
     setCorrect(false)
@@ -101,6 +100,8 @@ export default function RoundPhase({
     setShowReveal(false)
     revealedOnce.current = false
     advanceScheduled.current = false
+    streakBroken.current = false 
+    isSubmitting.current = false // Liberamos el candado al inicio de cada ronda
 
     const load = async () => {
       const { data } = await supabase
@@ -121,12 +122,35 @@ export default function RoundPhase({
     }
   }, [round])
 
-  // Mantiene el volumen elegido cada vez que arranca una canción nueva
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume
     }
   }, [volume, round])
+
+  const handleBreakStreak = useCallback(() => {
+    if (streakBroken.current) return
+    streakBroken.current = true
+    
+    supabase.from('players').select('current_streak, nickname').eq('id', playerId).single()
+      .then(({ data: p }) => {
+        if (p && p.current_streak && p.current_streak >= 4) {
+          // NUEVO: Agregamos el self: true para que el host lo vea
+          supabase.channel(`chat-${roomId}`, { config: { broadcast: { self: true } } }).send({
+            type: 'broadcast',
+            event: 'chat-message',
+            payload: {
+              id: 'sys-break-' + Date.now(),
+              nickname: 'Sistema',
+              text: `¡${p.nickname} perdió la racha!`,
+              created_at: new Date().toISOString(),
+              isSystem: true
+            }
+          })
+        }
+        supabase.from('players').update({ current_streak: 0 }).eq('id', playerId).then()
+      })
+  }, [playerId, roomId])
 
   useEffect(() => {
     const tick = () => {
@@ -142,40 +166,50 @@ export default function RoundPhase({
       if (diff === 0 && !showReveal) {
         setShowReveal(true)
         audioRef.current?.pause()
+
+        if (!correct && round?.picks.player_id !== playerId) {
+          handleBreakStreak()
+        }
       }
 
       if (diff === 0 && isHost && !advanceScheduled.current) {
-        console.log('[round] programando avance en 5s. currentRound:', currentRound, 'totalRounds:', totalRounds)
         advanceScheduled.current = true
         setTimeout(() => {
-          console.log('[round] avanzando ahora')
           if (currentRound >= totalRounds) {
             supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
-              .then(({ error }) => console.log('[round] error finished:', error))
+              .then(({ error }) => { if (error) console.error(error) })
           } else {
             supabase.from('rooms').update({
               current_round: currentRound + 1,
               round_deadline: new Date(nowSynced() + ROUND_SECONDS * 1000).toISOString()
             }).eq('id', roomId)
-              .then(({ error }) => console.log('[round] error next round:', error))
+              .then(({ error }) => { if (error) console.error(error) })
           }
         }, REVEAL_SECONDS * 1000)
       }
     }
+    
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [roundDeadline, round, isHost, currentRound, totalRounds, roomId, showReveal])
+  }, [roundDeadline, round, isHost, currentRound, totalRounds, roomId, showReveal, correct, playerId, handleBreakStreak])
 
   const submitGuess = useCallback(async () => {
     if (!round || correct || !guess.trim() || showReveal) return
     if (round.picks.player_id === playerId) return
+    
+    // NUEVO: Bloqueamos si ya está procesando una respuesta
+    if (isSubmitting.current) return
+    isSubmitting.current = true
 
     const isCorrect = normalize(guess) === normalize(baseTitle(round.picks.track_name))
 
     if (!isCorrect) {
       setShowWrong(true)
       setGuess('')
+      
+      // Liberamos el candado para que pueda intentar de nuevo
+      isSubmitting.current = false 
       return
     }
 
@@ -187,12 +221,39 @@ export default function RoundPhase({
 
     await supabase.from('guesses').insert({ round_id: round.id, player_id: playerId, is_correct: true })
 
-    const { data: guesser } = await supabase.from('players').select('score, total_score').eq('id', playerId).single()
+    const { data: guesser } = await supabase.from('players').select('score, total_score, current_streak, nickname').eq('id', playerId).single()
+    
     if (guesser) {
+      let finalPoints = points;
+      const currentStreak = guesser.current_streak || 0;
+      const newStreak = currentStreak + 1;
+
+      if (newStreak >= 4) {
+        finalPoints = Math.round(points * 1.50);
+      }
+
       await supabase.from('players').update({
-        score: guesser.score + points,
-        total_score: (guesser.total_score ?? 0) + points
+        score: guesser.score + finalPoints,
+        total_score: (guesser.total_score ?? 0) + finalPoints,
+        current_streak: newStreak
       }).eq('id', playerId)
+
+      if (newStreak === 4) {
+        // NUEVO: Agregamos el self: true acá también
+        supabase.channel(`chat-${roomId}`, { config: { broadcast: { self: true } } }).send({
+          type: 'broadcast',
+          event: 'chat-message',
+          payload: {
+            id: 'sys-' + Date.now(),
+            nickname: 'Sistema',
+            text: `¡${guesser.nickname} está en racha! 🔥`,
+            created_at: new Date().toISOString(),
+            isSystem: true 
+          }
+        })
+      }
+
+      setEarned(finalPoints)
     }
 
     const { data: owner } = await supabase.from('players').select('score, total_score').eq('id', round.picks.player_id).single()
@@ -203,9 +264,8 @@ export default function RoundPhase({
       }).eq('id', round.picks.player_id)
     }
 
-    setEarned(points)
     setCorrect(true)
-  }, [round, guess, playerId, correct, secondsLeft, showReveal])
+  }, [round, guess, playerId, correct, secondsLeft, showReveal, roomId, handleBreakStreak])
 
   if (!round) return <p className="status-box">Cargando ronda...</p>
 
