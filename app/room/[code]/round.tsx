@@ -27,11 +27,50 @@ function baseTitle(trackName: string) {
   return trackName.split('(')[0].split('[')[0].trim()
 }
 
+// Elige qué posiciones (índices globales sobre el título) se revelan:
+// - 1 sola palabra -> 2 letras de esa palabra
+// - 2+ palabras -> 1 letra por cada palabra
+function pickRevealIndices(title: string): number[] {
+  const words: { start: number; text: string }[] = []
+  let idx = 0
+  title.split(' ').forEach(w => {
+    words.push({ start: idx, text: w })
+    idx += w.length + 1 // +1 por el espacio que separa palabras
+  })
+
+  const letterPositions = (word: { start: number; text: string }) =>
+    word.text
+      .split('')
+      .map((ch, i) => (/[a-zA-Z0-9]/.test(ch) ? word.start + i : -1))
+      .filter(i => i !== -1)
+
+  const revealed: number[] = []
+
+  if (words.length <= 1) {
+    const positions = letterPositions(words[0])
+    const shuffled = [...positions].sort(() => Math.random() - 0.5)
+    revealed.push(...shuffled.slice(0, 2))
+  } else {
+    words.forEach(w => {
+      const positions = letterPositions(w)
+      if (positions.length > 0) {
+        revealed.push(positions[Math.floor(Math.random() * positions.length)])
+      }
+    })
+  }
+
+  return revealed
+}
+
 function maskTitle(title: string, revealed: Set<number>) {
-  return title.split('').map((ch, i) => {
-    if (!/[a-zA-Z0-9]/.test(ch)) return ch
-    return revealed.has(i) ? ch : '_'
-  }).join(' ')
+  return title
+    .split('')
+    .map((ch, i) => {
+      if (ch === ' ') return '   ' // espacio extra para que se note el corte de palabra
+      if (!/[a-zA-Z0-9]/.test(ch)) return ch
+      return revealed.has(i) ? ch : '_'
+    })
+    .join('')
 }
 
 export default function RoundPhase({
@@ -97,12 +136,7 @@ export default function RoundPhase({
       if (!revealedOnce.current && diff <= Math.floor(ROUND_SECONDS / 2) && round) {
         revealedOnce.current = true
         const title = baseTitle(round.picks.track_name)
-        const letterPositions = title
-          .split('')
-          .map((ch, i) => (/[a-zA-Z0-9]/.test(ch) ? i : -1))
-          .filter(i => i !== -1)
-        const shuffled = [...letterPositions].sort(() => Math.random() - 0.5)
-        setRevealedIdx(new Set(shuffled.slice(0, 2)))
+        setRevealedIdx(new Set(pickRevealIndices(title)))
       }
 
       if (diff === 0 && !showReveal) {
@@ -141,7 +175,6 @@ export default function RoundPhase({
       return
     }
 
-    // Puntos del que adivina: escala 0-100 según lo rápido que contestó
     const elapsedMs = (ROUND_SECONDS - secondsLeft) * 1000
     const points = Math.max(
       MIN_GUESS_POINTS,
@@ -158,7 +191,6 @@ export default function RoundPhase({
       }).eq('id', playerId)
     }
 
-    // El dueño de la canción suma 15 puntos por cada acierto que recibe
     const { data: owner } = await supabase.from('players').select('score, total_score').eq('id', round.picks.player_id).single()
     if (owner) {
       await supabase.from('players').update({
