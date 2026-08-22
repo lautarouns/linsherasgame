@@ -145,15 +145,19 @@ export default function RoundPhase({
       }
 
       if (diff === 0 && isHost && !advanceScheduled.current) {
+        console.log('[round] programando avance en 5s. currentRound:', currentRound, 'totalRounds:', totalRounds)
         advanceScheduled.current = true
         setTimeout(() => {
+          console.log('[round] avanzando ahora')
           if (currentRound >= totalRounds) {
             supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
+              .then(({ error }) => console.log('[round] error finished:', error))
           } else {
             supabase.from('rooms').update({
               current_round: currentRound + 1,
               round_deadline: new Date(nowSynced() + ROUND_SECONDS * 1000).toISOString()
             }).eq('id', roomId)
+              .then(({ error }) => console.log('[round] error next round:', error))
           }
         }, REVEAL_SECONDS * 1000)
       }

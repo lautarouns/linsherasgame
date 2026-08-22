@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import { nowSynced } from './serverTime'
 
-export async function startPickingPhase(roomId: string, songsPerPlayer = 1, seconds = 45) {
+export async function startPickingPhase(roomId: string, songsPerPlayer = 1, seconds = 120) {
   const deadline = new Date(nowSynced() + seconds * 1000).toISOString()
   await supabase
     .from('rooms')
