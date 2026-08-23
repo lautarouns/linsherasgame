@@ -13,6 +13,11 @@ type Track = {
   previewUrl: string
 }
 
+type Attempt = {
+  text: string
+  artistMatch: boolean
+}
+
 function normalize(value: string) {
   return value
     .toLowerCase()
@@ -34,7 +39,7 @@ export default function DailyPage() {
 
   const [currentAttempt, setCurrentAttempt] = useState(0)
   const [guess, setGuess] = useState('')
-  const [attemptHistory, setAttemptHistory] = useState<string[]>([])
+  const [attemptHistory, setAttemptHistory] = useState<Attempt[]>([])
   const [isWin, setIsWin] = useState(false)
   const [isLose, setIsLose] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -197,8 +202,12 @@ export default function DailyPage() {
   const processGuess = (guessTitle: string, guessArtist?: string) => {
     if (isWin || isLose || !dailyTrack || !guessTitle.trim()) return
 
+    const artistMatch = guessArtist
+      ? normalize(guessArtist) === normalize(dailyTrack.artist)
+      : false
+
     const historyEntry = guessArtist ? `${guessTitle} - ${guessArtist}` : guessTitle
-    setAttemptHistory(prev => [...prev, historyEntry])
+    setAttemptHistory(prev => [...prev, { text: historyEntry, artistMatch }])
     setShowSuggestions(false)
 
     if (normalize(baseTitle(guessTitle)) === normalize(baseTitle(dailyTrack.title))) {
@@ -231,7 +240,7 @@ export default function DailyPage() {
   const handleSkip = () => {
     if (isWin || isLose || !dailyTrack) return
 
-    setAttemptHistory(prev => [...prev, 'Saltaste'])
+    setAttemptHistory(prev => [...prev, { text: 'Saltaste', artistMatch: false }])
     setShowSuggestions(false)
     const nextAttempt = currentAttempt + 1
 
@@ -374,9 +383,21 @@ export default function DailyPage() {
 
         <ul className="daily-attempts" style={{ listStyle: 'none', padding: 0, margin: '16px 0 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {attemptHistory.length > 0 ? (
-            attemptHistory.map((entry, index) => (
-              <li key={`${entry}-${index}`} style={{ background: 'var(--table-row)', border: '1px solid var(--soft)', padding: '10px 14px', borderRadius: 12, fontSize: 14 }}>
-                <span style={{ color: 'var(--muted)', marginRight: 10, fontFamily: 'var(--font-code)' }}>{index + 1}.</span> {entry}
+            attemptHistory.map((attempt, index) => (
+              <li
+                key={`${attempt.text}-${index}`}
+                style={{
+                  background: attempt.artistMatch ? 'rgba(247, 201, 72, 0.16)' : 'var(--table-row)',
+                  border: `1px solid ${attempt.artistMatch ? 'rgba(247, 201, 72, 0.5)' : 'var(--soft)'}`,
+                  padding: '10px 14px',
+                  borderRadius: 12,
+                  fontSize: 14
+                }}
+              >
+                <span style={{ color: 'var(--muted)', marginRight: 10, fontFamily: 'var(--font-code)' }}>{index + 1}.</span> {attempt.text}
+                {attempt.artistMatch && (
+                  <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--accent)', fontWeight: 700 }}>ARTISTA CORRECTO</span>
+                )}
               </li>
             ))
           ) : (
