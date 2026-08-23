@@ -69,6 +69,15 @@ export default function Home() {
       <h2 className="page-title">Adiviná la canción</h2>
       <p className="page-subtitle">Entrá con tu nombre o uníndote a una sala.</p>
 
+      <button
+        type="button"
+        onClick={() => router.push('/daily')}
+        className="btn-principal"
+        style={{ width: 'min(100%, 320px)', marginBottom: 18 }}
+      >
+        Songlio Diario
+      </button>
+
       <main className="page-card">
         <label className="field-label" htmlFor="nickname">Tu nombre</label>
         <input

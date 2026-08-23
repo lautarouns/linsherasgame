@@ -130,6 +130,208 @@ select {
   color: rgba(242, 240, 236, 0.55);
 }
 
+.daily-card {
+  width: min(100%, 640px);
+}
+
+.daily-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.daily-kicker {
+  margin: 0 0 8px;
+  font-family: var(--font-code);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.daily-title {
+  margin: 0;
+  text-align: left;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+}
+
+.daily-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 24px 0 18px;
+}
+
+.daily-progress-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(242, 240, 236, 0.62);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: all 0.18s ease;
+}
+
+.daily-progress-step.is-done {
+  border-color: rgba(247, 201, 72, 0.26);
+  background: rgba(247, 201, 72, 0.12);
+  color: #fff;
+}
+
+.daily-progress-step.is-active {
+  border-color: rgba(247, 201, 72, 0.48);
+  box-shadow: 0 0 0 3px rgba(247, 201, 72, 0.12);
+}
+
+.daily-audio-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.daily-timer-badge {
+  min-width: 78px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.025);
+  text-align: center;
+  font-family: var(--font-code);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.daily-input-row {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+
+.daily-input-row .guess-input {
+  flex: 1;
+}
+
+.daily-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.daily-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 10px 0 14px;
+}
+
+.daily-meta-item {
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.daily-meta-item span {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(242, 240, 236, 0.58);
+}
+
+.daily-meta-item strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1rem;
+  color: #fff;
+}
+
+.daily-attempts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.daily-attempts li {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(242, 240, 236, 0.72);
+}
+
+.daily-result {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.daily-result.is-win {
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.08);
+}
+
+.daily-result.is-loss {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.daily-result-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.daily-result-wrap img {
+  width: 76px;
+  height: 76px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.daily-result-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.daily-result-copy p {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(242, 240, 236, 0.6);
+}
+
+.daily-result-copy h3 {
+  margin: 0;
+  font-size: clamp(1.15rem, 2vw, 1.5rem);
+  color: #fff;
+}
+
+.daily-result-copy span {
+  color: rgba(242, 240, 236, 0.7);
+}
+
 /* ---------- Fields & buttons ---------- */
 
 .form-field,
@@ -196,6 +398,24 @@ select {
 .btn-principal:focus-visible {
   outline: none;
   box-shadow: 0 0 0 4px rgba(247, 201, 72, 0.28);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--foreground);
+  padding: 14px 18px;
+  border: 1px solid var(--soft-strong);
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
 }
 
 .form-row .btn-principal {
