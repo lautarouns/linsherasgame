@@ -20,7 +20,8 @@ export default function PickingPhase({
   deadline,
   isHost,
   totalPlayers,
-  songsPerPlayer
+  songsPerPlayer,
+  roundSeconds
 }: {
   roomId: string
   playerId: string
@@ -28,15 +29,16 @@ export default function PickingPhase({
   isHost: boolean
   totalPlayers: number
   songsPerPlayer: number
+  roundSeconds: number
 }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Track[]>([])
   const [myPicks, setMyPicks] = useState<Track[]>([])
   const [secondsLeft, setSecondsLeft] = useState(0)
   const [picksCount, setPicksCount] = useState(0)
+  const [timeWindow, setTimeWindow] = useState(0)
   const triggered = useRef(false)
   const shortened = useRef(false)
-  const totalSeconds = useRef(0)
 
   const totalExpectedPicks = totalPlayers * songsPerPlayer
 
@@ -44,18 +46,17 @@ export default function PickingPhase({
     const tick = () => {
       const diff = Math.max(0, Math.floor((new Date(deadline).getTime() - nowSynced()) / 1000))
       setSecondsLeft(diff)
-      // Guarda el tramo más largo visto para dibujar la barra de progreso
-      if (diff > totalSeconds.current) totalSeconds.current = diff
+      setTimeWindow(prev => Math.max(prev, diff))
 
       if (diff === 0 && isHost && !triggered.current) {
         triggered.current = true
-        startPlayingPhase(roomId)
+        startPlayingPhase(roomId, roundSeconds)
       }
     }
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [deadline, isHost, roomId])
+  }, [deadline, isHost, roomId, roundSeconds])
 
   useEffect(() => {
     const loadCount = async () => {
@@ -98,10 +99,8 @@ export default function PickingPhase({
   }, [picksCount, totalExpectedPicks, isHost, secondsLeft, roomId])
 
   useEffect(() => {
-    if (query.length < 2) {
-      setResults([])
-      return
-    }
+    if (query.length < 2) return
+
     const timeout = setTimeout(async () => {
       const res = await fetch(
         `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=8`
@@ -127,8 +126,9 @@ export default function PickingPhase({
   }, [roomId, playerId])
 
   const doneWithMine = myPicks.length >= songsPerPlayer
-  const pct = totalSeconds.current > 0
-    ? Math.max(0, Math.min(100, (secondsLeft / totalSeconds.current) * 100))
+  const visibleResults = query.length < 2 ? [] : results
+  const pct = timeWindow > 0
+    ? Math.max(0, Math.min(100, (secondsLeft / timeWindow) * 100))
     : 0
 
   if (doneWithMine) {
@@ -188,7 +188,7 @@ export default function PickingPhase({
       </div>
 
       <ul className="track-results">
-        {results.map(track => (
+        {visibleResults.map(track => (
           <li key={track.trackId} className="track-result" onClick={() => choosePick(track)}>
             <img src={track.artworkUrl100} width={48} height={48} alt="" />
             <span><strong>{track.trackName}</strong> {track.artistName}</span>

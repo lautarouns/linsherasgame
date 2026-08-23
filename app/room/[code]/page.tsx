@@ -35,14 +35,14 @@ export default function RoomPage() {
 
   const [room, setRoom] = useState<Room | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
-  const [playerId, setPlayerId] = useState<string | null>(null)
+  const [playerId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem('playerId')
+  })
   const [onlinePlayerIds, setOnlinePlayerIds] = useState<Set<string>>(new Set())
   const [songsPerPlayer, setSongsPerPlayer] = useState(1)
+  const [roundSeconds, setRoundSeconds] = useState(15)
   const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    setPlayerId(localStorage.getItem('playerId'))
-  }, [])
 
   // Sincroniza el reloj contra el servidor una vez al entrar a la sala
   useEffect(() => {
@@ -183,8 +183,24 @@ export default function RoomPage() {
                   </select>
                 </div>
 
+                <div className="select-wrap is-stack">
+                  <label>Tiempo por ronda</label>
+                  <div className="segment-group">
+                    {[15, 20, 25].map(seconds => (
+                      <button
+                        key={seconds}
+                        type="button"
+                        onClick={() => setRoundSeconds(seconds)}
+                        className={roundSeconds === seconds ? 'segment-button is-selected' : 'segment-button'}
+                      >
+                        {seconds}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
-                  onClick={() => startPickingPhase(room.id, songsPerPlayer)}
+                  onClick={() => startPickingPhase(room.id, songsPerPlayer, 120)}
                   className="btn-principal"
                   style={{ width: '100%' }}
                 >
@@ -205,6 +221,7 @@ export default function RoomPage() {
             isHost={isHost}
             totalPlayers={onlinePlayers.length}
             songsPerPlayer={room.songs_per_player}
+            roundSeconds={roundSeconds}
           />
         )}
 
@@ -216,6 +233,7 @@ export default function RoomPage() {
             roundDeadline={room.round_deadline}
             isHost={isHost}
             totalRounds={room.total_rounds}
+            roundSeconds={roundSeconds}
           />
         )}
 

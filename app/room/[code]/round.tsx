@@ -3,7 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { nowSynced } from '@/lib/serverTime'
 
-const ROUND_SECONDS = 15
+const DEFAULT_ROUND_SECONDS = 15
 const REVEAL_SECONDS = 5
 const BASE_POINTS = 100
 const MIN_GUESS_POINTS = 10
@@ -71,13 +71,15 @@ function maskTitle(title: string, revealed: Set<number>) {
 }
 
 export default function RoundPhase({
-  roomId, playerId, currentRound, roundDeadline, isHost, totalRounds
+  roomId, playerId, currentRound, roundDeadline, isHost, totalRounds, roundSeconds
 }: {
   roomId: string; playerId: string; currentRound: number
   roundDeadline: string; isHost: boolean; totalRounds: number
+  roundSeconds: number
 }) {
+  const roundDuration = roundSeconds > 0 ? roundSeconds : DEFAULT_ROUND_SECONDS
   const [round, setRound] = useState<RoundRow | null>(null)
-  const [secondsLeft, setSecondsLeft] = useState(ROUND_SECONDS)
+  const [secondsLeft, setSecondsLeft] = useState(roundDuration)
   const [guess, setGuess] = useState('')
   const [revealedIdx, setRevealedIdx] = useState<Set<number>>(new Set())
   const [correct, setCorrect] = useState(false)
@@ -92,18 +94,19 @@ export default function RoundPhase({
   const isSubmitting = useRef(false) // NUEVO: Candado para evitar el doble puntaje
 
   useEffect(() => {
-    setCorrect(false)
-    setShowWrong(false)
-    setGuess('')
-    setRevealedIdx(new Set())
-    setEarned(null)
-    setShowReveal(false)
-    revealedOnce.current = false
-    advanceScheduled.current = false
-    streakBroken.current = false 
-    isSubmitting.current = false // Liberamos el candado al inicio de cada ronda
-
     const load = async () => {
+      setCorrect(false)
+      setShowWrong(false)
+      setGuess('')
+      setRevealedIdx(new Set())
+      setEarned(null)
+      setShowReveal(false)
+      setSecondsLeft(roundDuration)
+      revealedOnce.current = false
+      advanceScheduled.current = false
+      streakBroken.current = false 
+      isSubmitting.current = false // Liberamos el candado al inicio de cada ronda
+
       const { data } = await supabase
         .from('rounds')
         .select('id, round_number, picks(track_name, artist, preview_url, artwork_url, player_id)')
@@ -113,7 +116,7 @@ export default function RoundPhase({
       if (data) setRound(data as unknown as RoundRow)
     }
     load()
-  }, [roomId, currentRound])
+  }, [roomId, currentRound, roundDuration])
 
   useEffect(() => {
     if (round?.picks.preview_url && audioRef.current) {
@@ -157,7 +160,7 @@ export default function RoundPhase({
       const diff = Math.max(0, Math.ceil((new Date(roundDeadline).getTime() - nowSynced()) / 1000))
       setSecondsLeft(diff)
 
-      if (!revealedOnce.current && diff <= Math.floor(ROUND_SECONDS / 2) && round) {
+      if (!revealedOnce.current && diff <= Math.floor(roundDuration / 2) && round) {
         revealedOnce.current = true
         const title = baseTitle(round.picks.track_name)
         setRevealedIdx(new Set(pickRevealIndices(title)))
@@ -181,7 +184,7 @@ export default function RoundPhase({
           } else {
             supabase.from('rooms').update({
               current_round: currentRound + 1,
-              round_deadline: new Date(nowSynced() + ROUND_SECONDS * 1000).toISOString()
+              round_deadline: new Date(nowSynced() + roundDuration * 1000).toISOString()
             }).eq('id', roomId)
               .then(({ error }) => { if (error) console.error(error) })
           }
@@ -192,7 +195,7 @@ export default function RoundPhase({
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [roundDeadline, round, isHost, currentRound, totalRounds, roomId, showReveal, correct, playerId, handleBreakStreak])
+  }, [roundDeadline, round, isHost, currentRound, totalRounds, roomId, showReveal, correct, playerId, handleBreakStreak, roundDuration])
 
   const submitGuess = useCallback(async () => {
     if (!round || correct || !guess.trim() || showReveal) return
@@ -213,10 +216,10 @@ export default function RoundPhase({
       return
     }
 
-    const elapsedMs = (ROUND_SECONDS - secondsLeft) * 1000
+    const elapsedMs = (roundDuration - secondsLeft) * 1000
     const points = Math.max(
       MIN_GUESS_POINTS,
-      Math.round(BASE_POINTS * (1 - elapsedMs / (ROUND_SECONDS * 1000)))
+      Math.round(BASE_POINTS * (1 - elapsedMs / (roundDuration * 1000)))
     )
 
     await supabase.from('guesses').insert({ round_id: round.id, player_id: playerId, is_correct: true })
@@ -265,12 +268,12 @@ export default function RoundPhase({
     }
 
     setCorrect(true)
-  }, [round, guess, playerId, correct, secondsLeft, showReveal, roomId, handleBreakStreak])
+  }, [round, guess, playerId, correct, secondsLeft, showReveal, roomId, handleBreakStreak, roundDuration])
 
   if (!round) return <p className="status-box">Cargando ronda...</p>
 
   const isOwnSong = round.picks.player_id === playerId
-  const pct = Math.max(0, Math.min(100, (secondsLeft / ROUND_SECONDS) * 100))
+  const pct = roundDuration > 0 ? Math.max(0, Math.min(100, (secondsLeft / roundDuration) * 100)) : 0
 
   if (showReveal) {
     return (
