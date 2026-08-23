@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 const DAILY_SEGMENTS = [0.5, 2, 4.5, 7]
 
@@ -20,7 +21,6 @@ function normalize(value: string) {
     .replace(/[^a-z0-9]/g, '')
 }
 
-// Limpia "(feat. ...)" para que la comparación sea más justa
 function baseTitle(trackName: string) {
   return trackName.split('(')[0].split('[')[0].trim()
 }
@@ -39,7 +39,6 @@ export default function DailyPage() {
   const [isLose, setIsLose] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   
-  // Estados para el buscador en vivo
   const [suggestions, setSuggestions] = useState<Track[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -49,11 +48,39 @@ export default function DailyPage() {
 
   const allowedSeconds = DAILY_SEGMENTS[Math.min(currentAttempt, DAILY_SEGMENTS.length - 1)]
 
-  // Cargar canción diaria
+  // CARGA DE CANCIÓN (CON SUPABASE)
   useEffect(() => {
     async function fetchDailyTrack() {
       try {
         setIsLoading(true)
+        
+        // 1. Armamos el string de la fecha de hoy (Ej: "2026-08-23")
+        const hoy = new Date()
+        const yyyy = hoy.getFullYear()
+        const mm = String(hoy.getMonth() + 1).padStart(2, '0')
+        const dd = String(hoy.getDate()).padStart(2, '0')
+        const todayStr = `${yyyy}-${mm}-${dd}`
+
+        // 2. Buscamos en Supabase si ya se generó la canción de hoy
+        const { data: existingSong, error: dbError } = await supabase
+          .from('daily_songs')
+          .select('*')
+          .eq('date_id', todayStr)
+          .single()
+
+        if (existingSong) {
+          // Si ya existe, usamos esa y listo. ¡No cambia en todo el día!
+          setDailyTrack({
+            title: existingSong.title,
+            artist: existingSong.artist,
+            cover: existingSong.cover,
+            previewUrl: existingSong.preview_url
+          })
+          setIsLoading(false)
+          return
+        }
+
+        // 3. Si no existe, es el primer jugador del día. Le pegamos a iTunes.
         const res = await fetch('https://itunes.apple.com/us/rss/topsongs/limit=200/json')
         if (!res.ok) throw new Error('Error al conectar con la API')
         
@@ -66,9 +93,8 @@ export default function DailyPage() {
 
         if (validTracks.length === 0) throw new Error('No se encontraron canciones válidas')
 
-        const hoy = new Date()
-        const seed = (hoy.getFullYear() * 10000) + ((hoy.getMonth() + 1) * 100) + hoy.getDate()
-        
+        // Elegimos una con la semilla de la fecha
+        const seed = parseInt(`${yyyy}${mm}${dd}`)
         const index = seed % validTracks.length
         const selectedEntry = validTracks[index]
 
@@ -76,11 +102,22 @@ export default function DailyPage() {
         const imageArray = selectedEntry['im:image']
         const coverLink = imageArray[imageArray.length - 1].label
 
-        setDailyTrack({
+        const newSong = {
+          date_id: todayStr,
           title: selectedEntry['im:name'].label,
           artist: selectedEntry['im:artist'].label,
           cover: coverLink,
-          previewUrl: audioLink
+          preview_url: audioLink
+        }
+
+        // 4. La guardamos en Supabase para el resto de los jugadores
+        await supabase.from('daily_songs').upsert(newSong)
+
+        setDailyTrack({
+          title: newSong.title,
+          artist: newSong.artist,
+          cover: newSong.cover,
+          previewUrl: newSong.preview_url
         })
 
       } catch (err) {
@@ -94,7 +131,7 @@ export default function DailyPage() {
     fetchDailyTrack()
   }, [])
 
-  // Buscador en vivo (Autocompletado)
+  // Buscador en vivo
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (guess.trim().length < 2) {
@@ -107,7 +144,6 @@ export default function DailyPage() {
       try {
         setIsSearching(true)
         setShowSuggestions(true)
-        // Buscamos en iTunes lo que el usuario tipea
         const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(guess)}&entity=song&limit=5`)
         const data = await res.json()
         
@@ -124,7 +160,7 @@ export default function DailyPage() {
       } finally {
         setIsSearching(false)
       }
-    }, 400) // 400ms de espera al terminar de escribir
+    }, 400)
 
     return () => clearTimeout(timer)
   }, [guess, isWin, isLose])
@@ -158,7 +194,6 @@ export default function DailyPage() {
     }, allowedSeconds * 1000)
   }, [allowedSeconds, dailyTrack])
 
-  // Lógica principal unificada para adivinar
   const processGuess = (guessTitle: string, guessArtist?: string) => {
     if (isWin || isLose || !dailyTrack || !guessTitle.trim()) return
 
@@ -166,7 +201,6 @@ export default function DailyPage() {
     setAttemptHistory(prev => [...prev, historyEntry])
     setShowSuggestions(false)
 
-    // Usamos baseTitle para perdonar si la oficial dice "(Acoustic)" y el usuario no lo puso
     if (normalize(baseTitle(guessTitle)) === normalize(baseTitle(dailyTrack.title))) {
       setIsWin(true)
       setMessage(`¡Correcto! Lo adivinaste con ${allowedSeconds}s.`)
@@ -186,12 +220,10 @@ export default function DailyPage() {
     setGuess('')
   }
 
-  // Cuando aprieta Enter o el botón amarillo a mano
   const handleManualGuess = () => {
     processGuess(guess)
   }
 
-  // Cuando hace clic en una sugerencia de la lista
   const handleSelectSuggestion = (track: Track) => {
     processGuess(track.title, track.artist)
   }
@@ -305,7 +337,6 @@ export default function DailyPage() {
             disabled={isWin || isLose}
           />
 
-          {/* MENÚ DESPLEGABLE CON LAS SUGERENCIAS */}
           {showSuggestions && (suggestions.length > 0 || isSearching) && (
             <ul className="track-results" style={{ marginTop: 0 }}>
               {isSearching ? (
@@ -328,16 +359,16 @@ export default function DailyPage() {
             <button type="button" className="btn-principal" onClick={handleManualGuess} style={{ flex: 1 }} disabled={isWin || isLose || showSuggestions}>
               Adivinar
             </button>
-            <button type="button" className="btn-principal" onClick={handleSkip} style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--soft-strong)', boxShadow: 'none', color: '#ffffff' }} disabled={isWin || isLose}>
+            <button type="button" className="btn-principal" onClick={handleSkip} style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--soft-strong)', boxShadow: 'none' }} disabled={isWin || isLose}>
               Saltar (+tiempo)
             </button>
           </div>
         </div>
 
-        <div className="daily-meta" style={{ display: 'flex', gap: 16, marginTop: 30, paddingBottom: 16, borderBottom: '1px solid var(--panel-border)' }}>
-          <div className="daily-meta-item" style={{ display: 'flex', flex: 1, flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 4, width: '100%' }}>
-            <span style={{ fontSize: 10, fontFamily: 'var(--font-code)', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em', textAlign: 'center' }}>Intento actual</span>
-            <strong style={{ fontSize: 16, textAlign: 'center' }}>{Math.min(currentAttempt + 1, DAILY_SEGMENTS.length)} / {DAILY_SEGMENTS.length}</strong>
+        <div className="daily-meta" style={{ display: 'flex', marginTop: 30, paddingBottom: 16, borderBottom: '1px solid var(--panel-border)' }}>
+          <div className="daily-meta-item" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 10, fontFamily: 'var(--font-code)', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Intento actual</span>
+            <strong style={{ fontSize: 16 }}>{Math.min(currentAttempt + 1, DAILY_SEGMENTS.length)} / {DAILY_SEGMENTS.length}</strong>
           </div>
         </div>
 
@@ -356,17 +387,14 @@ export default function DailyPage() {
         {(isWin || isLose) && (
           <div className="daily-result" style={{ marginTop: 30, padding: 24, borderRadius: 16, background: isWin ? 'rgba(247, 201, 72, 0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${isWin ? 'rgba(247, 201, 72, 0.3)' : 'var(--soft-strong)'}` }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '100%' }}>
-              
               <p style={{ color: isWin ? 'var(--accent)' : 'var(--muted)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 16px', fontSize: 12 }}>
                 {isWin ? '¡Ganaste!' : 'Resultado'}
               </p>
-              
               <img 
                 src={dailyTrack.cover.replace('100x100bb', '400x400bb')} 
                 alt={dailyTrack.title} 
                 style={{ width: 150, height: 150, borderRadius: 12, marginBottom: 16, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', objectFit: 'cover' }} 
               />
-              
               <h3 style={{ margin: '0 0 4px', fontSize: 24 }}>{dailyTrack.title}</h3>
               <span style={{ color: 'var(--muted)' }}>{dailyTrack.artist}</span>
 
@@ -375,7 +403,6 @@ export default function DailyPage() {
                   {message}
                 </p>
               )}
-
             </div>
           </div>
         )}
