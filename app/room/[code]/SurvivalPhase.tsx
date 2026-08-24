@@ -158,7 +158,6 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
 
   const [guess, setGuess] = useState('')
   const [suggestions, setSuggestions] = useState<Track[]>([])
-  const [isSearching, setIsSearching] = useState(false)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -283,28 +282,23 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
     setSuggestions([])
   }
 
-  // Buscador en vivo
+  // Buscador en vivo: filtra el pool ya cargado en memoria, sin pegarle a la red
   useEffect(() => {
-    const t = setTimeout(async () => {
-      if (guess.trim().length < 2) {
+    const t = setTimeout(() => {
+      const q = guess.trim().toLowerCase()
+      if (q.length < 2 || isFinished || tracks.length === 0) {
         setSuggestions([])
         return
       }
-      if (isFinished) return
-      try {
-        setIsSearching(true)
-        const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(guess)}&entity=song&limit=5`)
-        const data = await res.json()
-        const found = (data.results || []).map((r: any) => ({ title: r.trackName, artist: r.artistName, cover: r.artworkUrl100, previewUrl: r.previewUrl }))
-        setSuggestions(found)
-      } catch (e) {
-        console.error('search error', e)
-      } finally {
-        setIsSearching(false)
-      }
-    }, 350)
+      const matches = tracks
+        .filter(track =>
+          track.title.toLowerCase().includes(q) || track.artist.toLowerCase().includes(q)
+        )
+        .slice(0, 6)
+      setSuggestions(matches)
+    }, 150)
     return () => clearTimeout(t)
-  }, [guess, isFinished])
+  }, [guess, isFinished, tracks])
 
   return (
     <div>
