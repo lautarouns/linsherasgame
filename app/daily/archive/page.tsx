@@ -60,7 +60,7 @@ export default function DailyArchivePage() {
       <div className="page-card daily-card">
         <div className="daily-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <h1 className="page-title daily-title" style={{ fontSize: 28, margin: 0 }}>Días anteriores</h1>
-          <button type="button" className="btn-principal" style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--soft-strong)', boxShadow: 'none' }} onClick={() => router.push('/daily')}>
+          <button type="button" className="btn-principal" style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--soft-strong)', boxShadow: 'none', color: 'var(--foreground)' }} onClick={() => router.push('/daily')}>
             Volver al de hoy
           </button>
         </div>
@@ -84,7 +84,28 @@ export default function DailyArchivePage() {
                 className="track-result"
                 style={{ cursor: 'pointer' }}
               >
-                <img src={day.cover} alt="" />
+                {/* ACÁ ESTÁ EL FIX: Si jugó (p) muestra la foto, sino muestra el "?" */}
+                {p ? (
+                  <img src={day.cover} alt="" />
+                ) : (
+                  <div style={{
+                    width: 48,
+                    height: 48,
+                    minWidth: 48,
+                    borderRadius: 8,
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'rgba(255,255,255,0.2)',
+                    fontSize: 20,
+                    fontWeight: 'bold'
+                  }}>
+                    ?
+                  </div>
+                )}
+                
                 <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', flex: 1 }}>
                   <strong>{day.date_id}</strong>
                   <span style={{ fontSize: 13, color: 'var(--muted)' }}>

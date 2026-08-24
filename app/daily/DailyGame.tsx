@@ -357,11 +357,11 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {isArchive && (
-              <button type="button" className="btn-principal" style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--soft-strong)', boxShadow: 'none' }} onClick={() => router.push('/daily/archive')}>
+                          <button type="button" className="btn-principal" style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--soft-strong)', boxShadow: 'none', color: 'var(--foreground)' }} onClick={() => router.push('/daily/archive')}>
                 Archivo
               </button>
             )}
-            <button type="button" className="btn-principal" style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--soft-strong)', boxShadow: 'none' }} onClick={() => router.push('/')}>
+            <button type="button" className="btn-principal" style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--soft-strong)', boxShadow: 'none', color: 'var(--foreground)' }} onClick={() => router.push('/')}>
               Volver
             </button>
           </div>
@@ -459,7 +459,7 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
             <button type="button" className="btn-principal" onClick={handleManualGuess} style={{ flex: 1 }} disabled={isWin || isLose || showSuggestions}>
               Adivinar
             </button>
-            <button type="button" className="btn-principal" onClick={handleSkip} style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--soft-strong)', boxShadow: 'none' }} disabled={isWin || isLose}>
+            <button type="button" className="btn-principal" onClick={handleSkip} style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--soft-strong)', color: 'var(--foreground)', boxShadow: 'none' }} disabled={isWin || isLose}>
               Saltar (+tiempo)
             </button>
           </div>
