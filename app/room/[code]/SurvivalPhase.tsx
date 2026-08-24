@@ -11,6 +11,30 @@ type Track = {
   previewUrl: string
 }
 
+
+const POPULAR_ARTISTS = [
+  // Argentina / Latinoamérica
+  'Duki', 'Bizarrap', 'Emilia', 'Trueno', 'Nicki Nicole', 'Wos', 'Paulo Londra',
+  'Tini', 'La Joaqui', 'Khea', 'Cazzu', 'Milo J', 'YSY A', 'Tiago PZK',
+  'Bad Bunny', 'Karol G', 'Feid', 'Rauw Alejandro', 'Shakira', 'Ozuna',
+  'Maluma', 'J Balvin', 'Peso Pluma', 'Fuerza Regida', 'Rels B', 'Zell',
+  'Taylor Swift', 'Drake', 'The Weeknd', 'Billie Eilish', 'Ariana Grande',
+  'Post Malone', 'Travis Scott', 'Olivia Rodrigo', 'Doja Cat', 'SZA',
+  'Kendrick Lamar', 'Bruno Mars', 'Beyoncé', 'Justin Bieber', 'Chris Brown',
+  'Dua Lipa', 'Ed Sheeran', 'Coldplay', 'David Guetta', 'Rosalía',
+  'Stromae', 'Aitana', 'Quevedo', 'Sam Smith',
+  'Calvin Harris', 'Imagine Dragons', 'Måneskin', 'ABBA',
+  'Metallica', 'Iron Maiden', 'Black Sabbath', 'Slipknot', 'System of a Down',
+  'Megadeth', 'Slayer', 'Pantera', 'Rammstein', 'Judas Priest',
+  'Deftones', 'Guns N Roses', 'AC/DC', 'Sepultura', 'Korn',
+  'Michael Jackson', 'Madonna', 'Queen', 'Duran Duran', 'Whitney Houston',
+  'Cyndi Lauper', 'Tears for Fears', 'a-ha', 'Culture Club', 'Wham',
+  'Prince', 'Eurythmics', 'Bon Jovi', 'Soda Stereo', 'Hombres G',
+  'Eminem', 'Jay-Z', 'Kanye West', 'Tyler the Creator', 'Nicki Minaj',
+  '50 Cent', 'Snoop Dogg', 'Dr. Dre', 'Cardi B', 'A$AP Rocky',
+  'Wu-Tang Clan', 'Notorious B.I.G.', 'Tupac', 'J. Cole', 'Lil Wayne'
+]
+
 function baseTitle(trackName: string) {
   return trackName.split('(')[0].split('[')[0].trim()
 }
@@ -53,10 +77,9 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
   const [tracks, setTracks] = useState<Track[]>([])
   const [index, setIndex] = useState(0)
   const [guessed, setGuessed] = useState(0)
-  
-  // EL FIX DEL ERROR ROJO: Declaramos el estado del volumen (0.5 = 50%)
+
   const [volume, setVolume] = useState(0.5)
-  
+
   const [remaining, setRemaining] = useState<number>(() => Math.max(0, Math.ceil((new Date(roundDeadline).getTime() - nowSynced()) / 1000)))
   const [isFinished, setIsFinished] = useState(false)
 
@@ -67,31 +90,45 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const timerRef = useRef<number | null>(null)
 
-  // 1. Cargar temas con la seed que cambia cada partida
+  // 1. Cargar temas de una lista curada de artistas de varias regiones y géneros, con la seed que cambia cada partida
   useEffect(() => {
     let cancelled = false
     async function loadTop() {
       try {
-        const res = await fetch('https://itunes.apple.com/us/rss/topsongs/limit=200/json')
-        if (!res.ok) return
-        const data = await res.json()
-        const entries = data.feed.entry || []
-        const maps: Track[] = entries.map((entry: any) => {
-          const audioLink = (entry.link || []).find((l: any) => l.attributes && l.attributes.title === 'Preview')?.attributes?.href
-          const imageArray = entry['im:image'] || []
-          const coverLink = imageArray[imageArray.length - 1]?.label
-          return {
-            title: entry['im:name']?.label ?? '',
-            artist: entry['im:artist']?.label ?? '',
-            cover: coverLink ?? '',
-            previewUrl: audioLink ?? ''
-          }
-        }).filter((t: Track) => t.previewUrl)
+        const responses = await Promise.all(
+          POPULAR_ARTISTS.map(artist =>
+            fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=song&limit=15`)
+              .then(r => r.ok ? r.json() : null)
+              .catch(() => null)
+          )
+        )
 
-        const shuffled = seededShuffle(maps, roomCode + roundDeadline)
+        const allResults = responses
+          .filter(Boolean)
+          .flatMap((d: any) => d.results || [])
+
+        const maps: Track[] = allResults
+          .filter((r: any) => r.previewUrl)
+          .map((r: any) => ({
+            title: r.trackName,
+            artist: r.artistName,
+            cover: r.artworkUrl100,
+            previewUrl: r.previewUrl
+          }))
+
+        // Saca duplicados (la misma canción puede salir en varias búsquedas)
+        const seen = new Set<string>()
+        const unique = maps.filter(t => {
+          const key = normalize(t.title) + '|' + normalize(t.artist)
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+
+        const shuffled = seededShuffle(unique, roomCode + roundDeadline)
         if (!cancelled) setTracks(shuffled)
       } catch (e) {
-        console.error('Error cargando top songs', e)
+        console.error('Error cargando canciones', e)
       }
     }
     loadTop()
@@ -117,13 +154,13 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
     if (tracks.length === 0 || isFinished || !audioRef.current) return
     const track = tracks[index]
     const audio = audioRef.current
-    
+
     if (audio.src !== track.previewUrl) {
       audio.src = track.previewUrl
     }
-    
+
     audio.volume = volume
-    audio.loop = true // Vuelve a empezar si pasan los 30s de la preview
+    audio.loop = true
     audio.currentTime = 0
     audio.play().catch(e => console.log('Autoplay bloqueado por el navegador (hacé clic en la página):', e))
 
@@ -230,7 +267,6 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
       {!isFinished ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, position: 'relative' }}>
 
-          {/* Regulador de volumen integrado */}
           <div className="volume-row" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, marginBottom: 4, border: '1px solid rgba(255,255,255,0.05)' }}>
             <span style={{ fontSize: 18 }}>🔊</span>
             <input
@@ -276,9 +312,9 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
             <button className="btn-principal" onClick={() => submitGuess()} style={{ flex: 1 }}>
               Adivinar
             </button>
-            <button 
-              className="btn-principal" 
-              onClick={handleSkip} 
+            <button
+              className="btn-principal"
+              onClick={handleSkip}
               style={{ flex: 1, background: 'rgba(255, 82, 82, 0.1)', border: '1px solid rgba(255, 82, 82, 0.3)', color: '#ff5252', boxShadow: 'none' }}
             >
               Saltar (-5s)
@@ -296,7 +332,7 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
         <div className="daily-result is-win" style={{ marginTop: 20, padding: 32, textAlign: 'center', borderRadius: 16, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--soft-strong)' }}>
           <h3 style={{ margin: '0 0 10px', fontSize: 24 }}>¡Tiempo finalizado!</h3>
           <p style={{ color: 'var(--muted)', marginBottom: 20 }}>Conseguiste adivinar <strong>{guessed}</strong> canciones.</p>
-          
+
           {totalPlayers > 1 && (
             <p style={{ fontSize: 14, color: 'var(--accent)', fontWeight: 'bold', animation: 'pulse 2s infinite' }}>
               Esperando a que termine el resto para ver los resultados...
@@ -305,7 +341,6 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
         </div>
       )}
 
-      {/* Audio oculto definitivo */}
       <audio ref={audioRef} preload="auto" />
     </div>
   )
