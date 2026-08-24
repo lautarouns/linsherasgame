@@ -5,7 +5,12 @@ export async function startPickingPhase(roomId: string, songsPerPlayer = 1, seco
   const deadline = new Date(nowSynced() + seconds * 1000).toISOString()
   await supabase
     .from('rooms')
-    .update({ status: 'picking', picking_deadline: deadline, songs_per_player: songsPerPlayer })
+    .update({ 
+      status: 'picking', 
+      picking_deadline: deadline, 
+      songs_per_player: songsPerPlayer,
+      game_mode: 'classic' // Le forzamos el modo clásico acá
+    })
     .eq('id', roomId)
 }
 
@@ -43,6 +48,18 @@ export async function startPlayingPhase(roomId: string, roundSeconds = 15) {
   }).eq('id', roomId)
 }
 
+export async function startSurvivalPhase(roomId: string, seconds = 75) {
+  // Set the room into playing + survival mode with a global deadline
+  const deadline = new Date(nowSynced() + seconds * 1000).toISOString()
+  await supabase.from('rooms').update({
+    status: 'playing',
+    game_mode: 'survival',
+    current_round: 1,
+    total_rounds: 0,
+    round_deadline: deadline
+  }).eq('id', roomId)
+}
+
 export async function resetGame(roomId: string) {
   const { data: rounds } = await supabase
     .from('rounds')
@@ -57,11 +74,12 @@ export async function resetGame(roomId: string) {
   await supabase.from('rounds').delete().eq('room_id', roomId)
   await supabase.from('picks').delete().eq('room_id', roomId)
   
-  // ACÁ ESTÁ EL ARREGLO: Agregamos current_streak: 0
+  // ACÁ ESTÁ EL ARREGLO DE AYER: Mantenemos el current_streak intacto
   await supabase.from('players').update({ score: 0, current_streak: 0 }).eq('room_id', roomId)
 
   await supabase.from('rooms').update({
     status: 'lobby',
+    game_mode: 'classic', // Limpiamos el modo al volver al lobby
     picking_deadline: null,
     current_round: 0,
     round_deadline: null,
