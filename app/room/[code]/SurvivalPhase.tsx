@@ -11,20 +11,21 @@ type Track = {
   previewUrl: string
 }
 
+// Mezcla de artistas populares por región y género: Argentina/Latam, EE.UU., Europa, metal, 80s, hip-hop
 const POPULAR_ARTISTS = [
   'Duki', 'Bizarrap', 'Emilia', 'Trueno', 'Nicki Nicole', 'Wos', 'Paulo Londra',
   'Tini', 'La Joaqui', 'Khea', 'Cazzu', 'Milo J', 'YSY A', 'Tiago PZK',
   'Bad Bunny', 'Karol G', 'Feid', 'Rauw Alejandro', 'Shakira', 'Ozuna',
-  'Maluma', 'J Balvin', 'Peso Pluma', 'Fuerza Regida', 'Rels B', 'Zell',
+  'Maluma', 'J Balvin', 'Peso Pluma', 'Fuerza Regida', 'Rels B',
   'Taylor Swift', 'Drake', 'The Weeknd', 'Billie Eilish', 'Ariana Grande',
   'Post Malone', 'Travis Scott', 'Olivia Rodrigo', 'Doja Cat', 'SZA',
   'Kendrick Lamar', 'Bruno Mars', 'Beyoncé', 'Justin Bieber', 'Chris Brown',
   'Dua Lipa', 'Ed Sheeran', 'Coldplay', 'David Guetta', 'Rosalía',
-  'Stromae', 'Aitana', 'Quevedo', 'Sam Smith',
+  'Stromae', 'Aitana', 'Quevedo', 'Sam Smith','Skrillex',
   'Calvin Harris', 'Imagine Dragons', 'Måneskin', 'ABBA',
   'Metallica', 'Iron Maiden', 'Black Sabbath', 'Slipknot', 'System of a Down',
   'Megadeth', 'Slayer', 'Pantera', 'Rammstein', 'Judas Priest',
-  'Deftones', 'Guns N Roses', 'AC/DC', 'Sepultura', 'Korn',
+  'Korn', 'Guns N Roses', 'AC/DC', 'Sepultura', 'Deftones',
   'Michael Jackson', 'Madonna', 'Queen', 'Duran Duran', 'Whitney Houston',
   'Cyndi Lauper', 'Tears for Fears', 'a-ha', 'Culture Club', 'Wham',
   'Prince', 'Eurythmics', 'Bon Jovi', 'Soda Stereo', 'Hombres G',
@@ -70,7 +71,7 @@ function seededShuffle<T>(arr: T[], seedStr: string) {
 }
 
 // Ejecuta las búsquedas de a tandas para no saturar el límite de la API de iTunes
-async function fetchInBatches(artists: string[], batchSize = 5, delayMs = 300) {
+async function fetchInBatches(artists: string[], batchSize = 5, delayMs = 400) {
   const results: any[] = []
   for (let i = 0; i < artists.length; i += batchSize) {
     const batch = artists.slice(i, i + batchSize)
@@ -95,10 +96,16 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
   const [tracks, setTracks] = useState<Track[]>([])
   const [index, setIndex] = useState(0)
   const [guessed, setGuessed] = useState(0)
+  const [isLoadingTracks, setIsLoadingTracks] = useState(true)
 
   const [volume, setVolume] = useState(0.5)
 
-  const [remaining, setRemaining] = useState<number>(() => Math.max(0, Math.ceil((new Date(roundDeadline).getTime() - nowSynced()) / 1000)))
+  // Duración total del modo (calculada una sola vez al montar, antes de que arranque la carga)
+  const durationMsRef = useRef<number>(new Date(roundDeadline).getTime() - nowSynced())
+
+  // El cronómetro real no arranca hasta que las canciones terminan de cargar
+  const [effectiveDeadline, setEffectiveDeadline] = useState<number | null>(null)
+  const [remaining, setRemaining] = useState<number>(() => Math.ceil(durationMsRef.current / 1000))
   const [isFinished, setIsFinished] = useState(false)
 
   const [guess, setGuess] = useState('')
@@ -106,13 +113,13 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
   const [isSearching, setIsSearching] = useState(false)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const timerRef = useRef<number | null>(null)
 
-  // 1. Cargar temas de una lista curada de artistas de varias regiones y géneros, en tandas, con la seed que cambia cada partida
+  // 1. Cargar temas de una lista curada de artistas, en tandas, con la seed que cambia cada partida
   useEffect(() => {
     let cancelled = false
     async function loadTop() {
       try {
+        setIsLoadingTracks(true)
         const responses = await fetchInBatches(POPULAR_ARTISTS)
 
         const allResults = responses
@@ -128,7 +135,6 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
             previewUrl: r.previewUrl
           }))
 
-        // Saca duplicados (la misma canción puede salir en varias búsquedas)
         const seen = new Set<string>()
         const unique = maps.filter(t => {
           const key = normalize(t.title) + '|' + normalize(t.artist)
@@ -138,28 +144,33 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
         })
 
         const shuffled = seededShuffle(unique, roomCode + roundDeadline)
-        if (!cancelled) setTracks(shuffled)
+        if (!cancelled) {
+          setTracks(shuffled)
+          // El cronómetro arranca recién ahora: te da la duración completa sin descontar la carga
+          setEffectiveDeadline(nowSynced() + durationMsRef.current)
+        }
       } catch (e) {
         console.error('Error cargando canciones', e)
+      } finally {
+        if (!cancelled) setIsLoadingTracks(false)
       }
     }
     loadTop()
     return () => { cancelled = true }
   }, [roomCode, roundDeadline])
 
-  // 2. Cronómetro Local
+  // 2. Cronómetro basado en el deadline efectivo (recién definido tras cargar)
   useEffect(() => {
-    timerRef.current = window.setInterval(() => {
-      setRemaining(r => {
-        if (r <= 1) {
-          window.clearInterval(timerRef.current ?? 0)
-          return 0
-        }
-        return r - 1
-      })
-    }, 1000)
-    return () => { if (timerRef.current) window.clearInterval(timerRef.current) }
-  }, [])
+    if (effectiveDeadline === null) return
+
+    const tick = () => {
+      const diff = Math.max(0, Math.ceil((effectiveDeadline - nowSynced()) / 1000))
+      setRemaining(diff)
+    }
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => clearInterval(interval)
+  }, [effectiveDeadline])
 
   // 3. Auto-reproducir en loop (Sin botón de play)
   useEffect(() => {
@@ -190,7 +201,7 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
 
   // 5. Finalizar localmente
   useEffect(() => {
-    if (remaining <= 0 && !isFinished) {
+    if (effectiveDeadline !== null && remaining <= 0 && !isFinished) {
       setIsFinished(true)
       if (audioRef.current) {
         audioRef.current.pause()
@@ -202,9 +213,9 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
         }
       })()
     }
-  }, [remaining, isFinished, guessed, playerId])
+  }, [remaining, isFinished, guessed, playerId, effectiveDeadline])
 
-  // 6. El Host chequea el tiempo global
+  // 6. El Host chequea el tiempo global (basado en el deadline original de la sala, para mantener sincronía entre jugadores)
   useEffect(() => {
     if (!isHost) return
     const checkGlobal = setInterval(() => {
@@ -231,7 +242,7 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
       setGuess('')
       setSuggestions([])
     } else {
-      setRemaining(r => Math.max(0, r - 5))
+      setEffectiveDeadline(d => (d !== null ? d - 5000 : d))
       setGuess('')
       setSuggestions([])
     }
@@ -239,7 +250,7 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
 
   const handleSkip = () => {
     if (isFinished || tracks.length === 0) return
-    setRemaining(r => Math.max(0, r - 5))
+    setEffectiveDeadline(d => (d !== null ? d - 5000 : d))
     setIndex(i => Math.min(tracks.length - 1, i + 1))
     setGuess('')
     setSuggestions([])
@@ -275,6 +286,10 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
           {remaining}s
         </div>
       </div>
+
+      {isLoadingTracks && (
+        <p className="status-box" style={{ textAlign: 'center', marginBottom: 16 }}>Cargando canciones... (el cronómetro todavía no arrancó)</p>
+      )}
 
       {!isFinished ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, position: 'relative' }}>
