@@ -34,6 +34,8 @@ const POPULAR_ARTISTS = [
   'Wu-Tang Clan', 'Notorious B.I.G.', 'Tupac', 'J. Cole', 'Lil Wayne'
 ]
 
+const POOL_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7 // 7 días
+
 function baseTitle(trackName: string) {
   return trackName.split('(')[0].split('[')[0].trim()
 }
@@ -90,6 +92,52 @@ async function fetchInBatches(artists: string[], batchSize = 5, delayMs = 400) {
   return results
 }
 
+// Trae el pool de canciones: primero intenta el caché en Supabase, y si no hay
+// (o está viejo), lo arma pegándole a iTunes y lo guarda para las próximas partidas.
+async function loadTrackPool(): Promise<Track[]> {
+  const { data: cached } = await supabase
+    .from('survival_pool')
+    .select('tracks, updated_at')
+    .eq('id', 1)
+    .single()
+
+  const isStale = !cached || (Date.now() - new Date(cached.updated_at).getTime() > POOL_MAX_AGE_MS)
+
+  if (cached && !isStale) {
+    return cached.tracks as Track[]
+  }
+
+  const responses = await fetchInBatches(POPULAR_ARTISTS)
+  const allResults = responses
+    .filter(Boolean)
+    .flatMap((d: any) => d.results || [])
+
+  const maps: Track[] = allResults
+    .filter((r: any) => r.previewUrl)
+    .map((r: any) => ({
+      title: r.trackName,
+      artist: r.artistName,
+      cover: r.artworkUrl100,
+      previewUrl: r.previewUrl
+    }))
+
+  const seen = new Set<string>()
+  const unique = maps.filter(t => {
+    const key = normalize(t.title) + '|' + normalize(t.artist)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  await supabase.from('survival_pool').upsert({
+    id: 1,
+    tracks: unique,
+    updated_at: new Date().toISOString()
+  })
+
+  return unique
+}
+
 export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadline, isHost, totalPlayers }:
   { roomId: string, playerId: string | null, roomCode: string, roundDeadline: string, isHost?: boolean, totalPlayers: number }) {
 
@@ -114,36 +162,15 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // 1. Cargar temas de una lista curada de artistas, en tandas, con la seed que cambia cada partida
+  // 1. Cargar temas (desde caché si existe, o armarlo una vez si no) y mezclarlos con la seed de esta partida
   useEffect(() => {
     let cancelled = false
     async function loadTop() {
       try {
         setIsLoadingTracks(true)
-        const responses = await fetchInBatches(POPULAR_ARTISTS)
+        const allTracks = await loadTrackPool()
 
-        const allResults = responses
-          .filter(Boolean)
-          .flatMap((d: any) => d.results || [])
-
-        const maps: Track[] = allResults
-          .filter((r: any) => r.previewUrl)
-          .map((r: any) => ({
-            title: r.trackName,
-            artist: r.artistName,
-            cover: r.artworkUrl100,
-            previewUrl: r.previewUrl
-          }))
-
-        const seen = new Set<string>()
-        const unique = maps.filter(t => {
-          const key = normalize(t.title) + '|' + normalize(t.artist)
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
-        })
-
-        const shuffled = seededShuffle(unique, roomCode + roundDeadline)
+        const shuffled = seededShuffle(allTracks, roomCode + roundDeadline)
         if (!cancelled) {
           setTracks(shuffled)
           // El cronómetro arranca recién ahora: te da la duración completa sin descontar la carga
