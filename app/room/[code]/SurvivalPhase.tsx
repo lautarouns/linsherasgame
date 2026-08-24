@@ -11,9 +11,7 @@ type Track = {
   previewUrl: string
 }
 
-
 const POPULAR_ARTISTS = [
-  // Argentina / Latinoamérica
   'Duki', 'Bizarrap', 'Emilia', 'Trueno', 'Nicki Nicole', 'Wos', 'Paulo Londra',
   'Tini', 'La Joaqui', 'Khea', 'Cazzu', 'Milo J', 'YSY A', 'Tiago PZK',
   'Bad Bunny', 'Karol G', 'Feid', 'Rauw Alejandro', 'Shakira', 'Ozuna',
@@ -71,6 +69,26 @@ function seededShuffle<T>(arr: T[], seedStr: string) {
   return a
 }
 
+// Ejecuta las búsquedas de a tandas para no saturar el límite de la API de iTunes
+async function fetchInBatches(artists: string[], batchSize = 5, delayMs = 300) {
+  const results: any[] = []
+  for (let i = 0; i < artists.length; i += batchSize) {
+    const batch = artists.slice(i, i + batchSize)
+    const batchResults = await Promise.all(
+      batch.map(artist =>
+        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=song&limit=15`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      )
+    )
+    results.push(...batchResults)
+    if (i + batchSize < artists.length) {
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+  }
+  return results
+}
+
 export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadline, isHost, totalPlayers }:
   { roomId: string, playerId: string | null, roomCode: string, roundDeadline: string, isHost?: boolean, totalPlayers: number }) {
 
@@ -90,18 +108,12 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const timerRef = useRef<number | null>(null)
 
-  // 1. Cargar temas de una lista curada de artistas de varias regiones y géneros, con la seed que cambia cada partida
+  // 1. Cargar temas de una lista curada de artistas de varias regiones y géneros, en tandas, con la seed que cambia cada partida
   useEffect(() => {
     let cancelled = false
     async function loadTop() {
       try {
-        const responses = await Promise.all(
-          POPULAR_ARTISTS.map(artist =>
-            fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=song&limit=15`)
-              .then(r => r.ok ? r.json() : null)
-              .catch(() => null)
-          )
-        )
+        const responses = await fetchInBatches(POPULAR_ARTISTS)
 
         const allResults = responses
           .filter(Boolean)
