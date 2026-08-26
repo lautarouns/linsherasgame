@@ -2,10 +2,11 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { startPickingPhase, startSurvivalPhase } from '@/lib/game'
+import { startPickingPhase, startSurvivalPhase, startDuelPhase } from '@/lib/game'
 import PickingPhase from './picking'
 import RoundPhase from './round'
 import SurvivalPhase from './SurvivalPhase'
+import DuelPhase from './DuelPhase'
 import Scoreboard from './scoreboard'
 import Leaderboard from './leaderboard'
 import ChatIsland from './ChatIsland'
@@ -44,8 +45,10 @@ export default function RoomPage() {
   const [onlinePlayerIds, setOnlinePlayerIds] = useState<Set<string>>(new Set())
   const [songsPerPlayer, setSongsPerPlayer] = useState(1)
   const [roundSeconds, setRoundSeconds] = useState(15)
+  const [duelRounds, setDuelRounds] = useState(10)
+  const [duelSeconds, setDuelSeconds] = useState(20)
   const [copied, setCopied] = useState(false)
-  const [selectedMode, setSelectedMode] = useState<'classic' | 'survival'>('classic')
+  const [selectedMode, setSelectedMode] = useState<'classic' | 'survival' | 'duel'>('classic')
 
   // Sincroniza el reloj contra el servidor una vez al entrar a la sala
   useEffect(() => {
@@ -188,6 +191,13 @@ export default function RoomPage() {
                   >
                     Supervivencia
                   </button>
+                  <button
+                    type="button"
+                    className={selectedMode === 'duel' ? 'segment-button is-selected' : 'segment-button'}
+                    onClick={() => setSelectedMode('duel')}
+                  >
+                    Duelo
+                  </button>
                 </div>
 
                 {selectedMode === 'classic' ? (
@@ -229,7 +239,7 @@ export default function RoomPage() {
                       Iniciar juego
                     </button>
                   </>
-                ) : (
+                ) : selectedMode === 'survival' ? (
                   <>
                     <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.02)', marginBottom: 12 }}>
                       <p style={{ margin: 0, color: 'var(--muted-strong)' }}>Carrera contrarreloj de 75s. La lista de canciones es infinita y compartida para todos. Tanto saltar como fallar penalizan -5s.</p>
@@ -241,6 +251,49 @@ export default function RoomPage() {
                       style={{ width: '100%' }}
                     >
                       Empezar Supervivencia
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.02)', marginBottom: 12 }}>
+                      <p style={{ margin: 0, color: 'var(--muted-strong)' }}>Todos escuchan la misma canción al mismo tiempo. El primero en adivinarla se lleva los puntos de la ronda.</p>
+                    </div>
+
+                    <div className="select-wrap">
+                      <label>Cantidad de rondas</label>
+                      <select
+                        className="select-oscuro"
+                        value={duelRounds}
+                        onChange={e => setDuelRounds(Number(e.target.value))}
+                      >
+                        {[5, 10, 15, 20].map(n => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="select-wrap is-stack">
+                      <label>Tiempo por ronda</label>
+                      <div className="segment-group">
+                        {[15, 20, 30].map(seconds => (
+                          <button
+                            key={seconds}
+                            type="button"
+                            onClick={() => setDuelSeconds(seconds)}
+                            className={duelSeconds === seconds ? 'segment-button is-selected' : 'segment-button'}
+                          >
+                            {seconds}s
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => startDuelPhase(room.id, duelRounds, duelSeconds)}
+                      className="btn-principal"
+                      style={{ width: '100%' }}
+                    >
+                      Empezar Duelo
                     </button>
                   </>
                 )}
@@ -272,6 +325,17 @@ export default function RoomPage() {
             roundDeadline={room.round_deadline}
             isHost={isHost}
             totalPlayers={onlinePlayers.length}
+          />
+        ) : room.status === 'playing' && room.round_deadline && room.game_mode === 'duel' ? (
+          <DuelPhase
+            roomId={room.id}
+            playerId={playerId}
+            nickname={currentPlayer?.nickname}
+            currentRound={room.current_round}
+            roundDeadline={room.round_deadline}
+            isHost={isHost}
+            totalRounds={room.total_rounds}
+            roundSeconds={duelSeconds}
           />
         ) : room.status === 'playing' && room.round_deadline && (
           <RoundPhase

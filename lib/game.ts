@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { nowSynced } from './serverTime'
+import { loadTrackPool, seededShuffle } from './tracks'
 
 export async function startPickingPhase(roomId: string, songsPerPlayer = 1, seconds = 120) {
   const deadline = new Date(nowSynced() + seconds * 1000).toISOString()
@@ -60,6 +61,45 @@ export async function startSurvivalPhase(roomId: string, seconds = 75) {
   }).eq('id', roomId)
 }
 
+// Arranca el modo Duelo: arma `totalRounds` rondas a partir del mismo pool de
+// canciones que usa Supervivencia (cacheado en Supabase), idempotente igual que
+// startPlayingPhase — si ya hay duelos armados para esta sala, no los reharagas.
+export async function startDuelPhase(roomId: string, totalRounds = 10, roundSeconds = 20) {
+  const { data: existingDuels } = await supabase
+    .from('duels')
+    .select('id')
+    .eq('room_id', roomId)
+
+  if (existingDuels && existingDuels.length > 0) {
+    await supabase.from('duels').delete().eq('room_id', roomId)
+  }
+
+  const pool = await loadTrackPool()
+  if (pool.length === 0) return
+
+  const shuffled = seededShuffle(pool, roomId + Date.now())
+  const picked = shuffled.slice(0, Math.min(totalRounds, shuffled.length))
+
+  const rows = picked.map((track, i) => ({
+    room_id: roomId,
+    round_number: i + 1,
+    track_title: track.title,
+    track_artist: track.artist,
+    track_cover: track.cover,
+    track_preview_url: track.previewUrl
+  }))
+
+  await supabase.from('duels').insert(rows)
+
+  await supabase.from('rooms').update({
+    status: 'playing',
+    game_mode: 'duel',
+    current_round: 1,
+    total_rounds: rows.length,
+    round_deadline: new Date(nowSynced() + roundSeconds * 1000).toISOString()
+  }).eq('id', roomId)
+}
+
 export async function resetGame(roomId: string) {
   const { data: rounds } = await supabase
     .from('rounds')
@@ -73,6 +113,7 @@ export async function resetGame(roomId: string) {
 
   await supabase.from('rounds').delete().eq('room_id', roomId)
   await supabase.from('picks').delete().eq('room_id', roomId)
+  await supabase.from('duels').delete().eq('room_id', roomId)
   
   // ACÁ ESTÁ EL ARREGLO DE AYER: Mantenemos el current_streak intacto
   await supabase.from('players').update({ score: 0, current_streak: 0 }).eq('room_id', roomId)
