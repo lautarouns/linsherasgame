@@ -1272,3 +1272,4 @@ select {
   .app-footer { width: calc(100% - 28px); padding: 10px 14px; font-size: 12px; border-radius: 12px; bottom: 12px; }
   .app-main { padding-bottom: 82px; }
 }
+@import "./songlio-animations.css";
