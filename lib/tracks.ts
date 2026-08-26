@@ -12,11 +12,11 @@ export const POPULAR_ARTISTS = [
   'Duki', 'Bizarrap', 'Emilia', 'Trueno', 'Nicki Nicole', 'Wos',
   'Paulo Londra', 'Tini', 'La Joaqui', 'Khea', 'Cazzu', 'Milo J',
   'YSY A', 'Tiago PZK', 'Bad Bunny', 'Karol G', 'Feid', 'Rauw Alejandro',
-  'Shakira', 'Ozuna', 'Maluma', 'J Balvin', 'Peso Pluma', 'Fuerza Regida','LINKIN PARK',
+  'Shakira', 'Ozuna', 'Maluma', 'J Balvin', 'Peso Pluma', 'Fuerza Regida',
   'Rels B', 'Taylor Swift', 'Drake', 'The Weeknd', 'Billie Eilish', 'Ariana Grande',
   'Post Malone', 'Travis Scott', 'Olivia Rodrigo', 'Doja Cat', 'SZA', 'Kendrick Lamar',
   'Bruno Mars', 'Beyoncé', 'Justin Bieber', 'Chris Brown', 'Dua Lipa', 'Ed Sheeran',
-  'Coldplay', 'David Guetta', 'Rosalía', 'Stromae', 'Aitana', 'Quevedo', 'Joji', 'Clúster',
+  'Coldplay', 'David Guetta', 'Rosalía', 'Stromae', 'Aitana', 'Quevedo',
   'Sam Smith', 'Skrillex', 'Calvin Harris', 'Imagine Dragons', 'Måneskin', 'ABBA',
   'Metallica', 'Iron Maiden', 'Black Sabbath', 'Slipknot', 'System of a Down', 'Megadeth',
   'Slayer', 'Pantera', 'Rammstein', 'Judas Priest', 'Korn', 'Guns N Roses',
@@ -32,7 +32,9 @@ export const POPULAR_ARTISTS = [
   'Prince Royce', 'Romeo Santos', 'Tego Calderon', 'Cosculluela'
 ]
 
-const POOL_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7 // 7 días
+const POOL_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7 // 7 días: refresco completo del catálogo
+const TOPUP_COOLDOWN_MS = 1000 * 60 * 15 // no intentar completar artistas faltantes más de 1 vez cada 15 min
+const TOPUP_BATCH_LIMIT = 15 // como mucho 15 artistas nuevos por intento de relleno, para ser suave con la API
 
 export function baseTitle(trackName: string) {
   return trackName.split('(')[0].split('[')[0].trim()
@@ -83,9 +85,8 @@ async function fetchArtist(artist: string): Promise<ArtistFetchResult> {
   }
 }
 
-// Ejecuta las búsquedas de a tandas para no saturar el límite de la API de iTunes.
-// Los artistas que fallan (red caída o 403 puntual) se reintentan una vez más al final,
-// en vez de perderse en silencio como pasaba antes.
+// Ejecuta las búsquedas de a tandas chicas para no saturar el límite de la API de iTunes.
+// Los que fallan (red caída, 403/429 puntual) se reintentan una vez más al final, con más aire.
 async function fetchInBatches(artists: string[], batchSize = 3, delayMs = 700): Promise<ArtistFetchResult[]> {
   const results: ArtistFetchResult[] = []
   for (let i = 0; i < artists.length; i += batchSize) {
@@ -97,8 +98,6 @@ async function fetchInBatches(artists: string[], batchSize = 3, delayMs = 700): 
     }
   }
 
-  // Si alguno falló, probablemente fue por el límite de la API — le damos varios
-  // segundos de aire antes de reintentar, uno por vez, en vez de mandarlo enseguida
   const failed = results.filter(r => !r.data)
   if (failed.length > 0) {
     await new Promise(resolve => setTimeout(resolve, 3000))
@@ -115,30 +114,8 @@ async function fetchInBatches(artists: string[], batchSize = 3, delayMs = 700): 
   return results
 }
 
-// Trae el pool de canciones: primero intenta el caché en Supabase (compartido por
-// Supervivencia, Duelo y Diario), y si no hay (o está viejo), lo arma pegándole a
-// iTunes y lo guarda para las próximas partidas.
-export async function loadTrackPool(): Promise<Track[]> {
-  const { data: cached } = await supabase
-    .from('survival_pool')
-    .select('tracks, updated_at')
-    .eq('id', 1)
-    .single()
-
-  const isStale = !cached || (Date.now() - new Date(cached.updated_at).getTime() > POOL_MAX_AGE_MS)
-
-  if (cached && !isStale) {
-    return cached.tracks as Track[]
-  }
-
-  const artistResults = await fetchInBatches(POPULAR_ARTISTS)
-
-  const stillFailed = artistResults.filter(r => !r.data).map(r => r.artist)
-  if (stillFailed.length > 0) {
-    console.warn('[tracks] No se pudieron cargar canciones para:', stillFailed.join(', '))
-  }
-
-  const allResults = artistResults
+function tracksFromResults(results: ArtistFetchResult[]): Track[] {
+  const allResults = results
     .map(r => r.data)
     .filter(Boolean)
     .flatMap((d: any) => d.results || [])
@@ -152,19 +129,102 @@ export async function loadTrackPool(): Promise<Track[]> {
       previewUrl: r.previewUrl
     }))
 
+  return dedupeTracks(maps)
+}
+
+function dedupeTracks(tracks: Track[]): Track[] {
   const seen = new Set<string>()
-  const unique = maps.filter(t => {
+  return tracks.filter(t => {
     const key = normalize(t.title) + '|' + normalize(t.artist)
     if (seen.has(key)) return false
     seen.add(key)
     return true
   })
+}
+
+// Arma el pool completo desde cero (los 124 artistas) y pisa el caché entero.
+// Se usa la primera vez que no hay ninguna fila cacheada, o cuando pasaron 7+ días.
+async function buildFullPool(): Promise<Track[]> {
+  const artistResults = await fetchInBatches(POPULAR_ARTISTS)
+
+  const covered = artistResults.filter(r => r.data).map(r => r.artist)
+  const stillFailed = artistResults.filter(r => !r.data).map(r => r.artist)
+  if (stillFailed.length > 0) {
+    console.warn('[tracks] No se pudieron cargar canciones para:', stillFailed.join(', '))
+  }
+
+  const tracks = tracksFromResults(artistResults)
 
   await supabase.from('survival_pool').upsert({
     id: 1,
-    tracks: unique,
-    updated_at: new Date().toISOString()
+    tracks,
+    covered_artists: covered,
+    updated_at: new Date().toISOString(),
+    last_topup_attempt: new Date().toISOString()
   })
 
-  return unique
+  return tracks
+}
+
+// Trae el pool de canciones: primero intenta el caché en Supabase (compartido por
+// Supervivencia, Duelo y Diario). Si ya existe pero le faltan artistas (porque
+// alguna búsqueda falló en su momento), intenta completar solo esos — de a poco,
+// respetando un enfriamiento entre intentos — en vez de rehacer todo el catálogo
+// cada vez, que es lo que termina gatillando el límite de iTunes una y otra vez.
+export async function loadTrackPool(): Promise<Track[]> {
+  const { data: cached } = await supabase
+    .from('survival_pool')
+    .select('tracks, covered_artists, updated_at, last_topup_attempt')
+    .eq('id', 1)
+    .single()
+
+  if (!cached) {
+    return buildFullPool()
+  }
+
+  const isStale = Date.now() - new Date(cached.updated_at).getTime() > POOL_MAX_AGE_MS
+  if (isStale) {
+    return buildFullPool()
+  }
+
+  const covered = new Set((cached.covered_artists as string[]) ?? [])
+  const missing = POPULAR_ARTISTS.filter(a => !covered.has(a))
+  const existingTracks = (cached.tracks as Track[]) ?? []
+
+  if (missing.length === 0) {
+    return existingTracks
+  }
+
+  const lastAttempt = cached.last_topup_attempt ? new Date(cached.last_topup_attempt).getTime() : 0
+  if (Date.now() - lastAttempt < TOPUP_COOLDOWN_MS) {
+    // Ya se intentó hace poco completar los faltantes — se devuelve lo que hay
+    // sin pegarle de nuevo a la API, para no seguir alimentando el bloqueo.
+    return existingTracks
+  }
+
+  const toTry = missing.slice(0, TOPUP_BATCH_LIMIT)
+  const artistResults = await fetchInBatches(toTry)
+
+  const newlyCovered = artistResults.filter(r => r.data).map(r => r.artist)
+  const stillFailed = artistResults.filter(r => !r.data).map(r => r.artist)
+  if (stillFailed.length > 0) {
+    console.warn('[tracks] Todavía sin cargar (se reintentará más tarde):', stillFailed.join(', '))
+  }
+  if (newlyCovered.length > 0) {
+    console.info('[tracks] Se sumaron canciones de:', newlyCovered.join(', '))
+  }
+
+  const newTracks = tracksFromResults(artistResults)
+  const mergedTracks = dedupeTracks([...existingTracks, ...newTracks])
+  const mergedCovered = [...covered, ...newlyCovered]
+
+  await supabase.from('survival_pool').upsert({
+    id: 1,
+    tracks: mergedTracks,
+    covered_artists: mergedCovered,
+    updated_at: cached.updated_at, // no reiniciamos el reloj de 7 días solo por completar artistas
+    last_topup_attempt: new Date().toISOString()
+  })
+
+  return mergedTracks
 }
