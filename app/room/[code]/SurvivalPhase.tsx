@@ -161,7 +161,7 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
         .filter(track =>
           track.title.toLowerCase().includes(q) || track.artist.toLowerCase().includes(q)
         )
-        .slice(0, 6)
+        .slice(0, 15)
       setSuggestions(matches)
     }, 150)
     return () => clearTimeout(t)

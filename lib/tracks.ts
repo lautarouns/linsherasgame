@@ -21,7 +21,7 @@ export const POPULAR_ARTISTS = [
   'Calvin Harris', 'Imagine Dragons', 'Måneskin', 'ABBA',
   'Metallica', 'Iron Maiden', 'Black Sabbath', 'Slipknot', 'System of a Down',
   'Megadeth', 'Slayer', 'Pantera', 'Rammstein', 'Judas Priest',
-  'Korn', 'Guns N Roses', 'AC/DC', 'Sepultura', 'Deftones',
+  'Korn', 'Guns N Roses', 'AC/DC', 'Sepultura', 'Deftones','Nirvana',
   'Michael Jackson', 'Madonna', 'Queen', 'Duran Duran', 'Whitney Houston',
   'Cyndi Lauper', 'Tears for Fears', 'a-ha', 'Culture Club', 'Wham',
   'Prince', 'Eurythmics', 'Bon Jovi', 'Soda Stereo', 'Hombres G',
