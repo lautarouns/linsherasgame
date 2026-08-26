@@ -1,206 +1,38 @@
-'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import Link from 'next/link'
 
-function randomCode() {
-  return Math.random().toString(36).substring(2, 6).toUpperCase()
-}
-
-/** Fondo animado: glows que derivan, línea que barre y partículas doradas. */
-function AnimatedBackground({ count = 13 }: { count?: number }) {
-  const particles = useMemo(
-    () =>
-      Array.from({ length: count }, (_, i) => {
-        const a = Math.abs((Math.sin(i * 12.9898) * 43758.5453) % 1)
-        const b = Math.abs((Math.sin(i * 78.233) * 12345.6789) % 1)
-        return {
-          left: `${a * 100}%`,
-          top: `${30 + b * 60}%`,
-          size: 2 + b * 3,
-          duration: `${9 + b * 10}s`,
-          delay: `${-a * 14}s`,
-        }
-      }),
-    [count]
-  )
+export default function HubPage() {
+  const bg = `radial-gradient(500px 300px at 8% 10%, rgba(247,201,72,0.04), transparent 20%), radial-gradient(400px 260px at 12% 90%, rgba(38,255,106,0.03), transparent 20%), radial-gradient(420px 300px at 88% 18%, rgba(155,89,255,0.04), transparent 18%), var(--background)`
 
   return (
-    <div className="sg-bg" aria-hidden>
-      <span className="sg-glow-a" />
-      <span className="sg-glow-b" />
-      <span className="sg-scanline" />
-      {particles.map((p, i) => (
-        <span
-          key={i}
-          className="sg-particle"
-          style={{
-            left: p.left,
-            top: p.top,
-            width: p.size,
-            height: p.size,
-            animationDuration: p.duration,
-            animationDelay: p.delay,
-          }}
-        />
-      ))}
-    </div>
-  )
-}
+    <div style={{ minHeight: '100vh', background: bg, padding: '72px 20px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', textAlign: 'center' }}>
+        <h1 className="animated-title" style={{ fontSize: '3.5rem', margin: 0 }}>Linsheradle</h1>
 
-/** Cortina de transición: se abre desde el centro con las barras del ecualizador. */
-function Curtain({ label, leaving }: { label: string; leaving: boolean }) {
-  return (
-    <div className={`sg-curtain${leaving ? ' is-leaving' : ''}`} aria-hidden>
-      <div className="sg-curtain-eq">
-        <span /><span /><span /><span /><span />
-      </div>
-      <p className="sg-curtain-label">{label}</p>
-    </div>
-  )
-}
+        <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap', justifyContent: 'center', marginTop: 40 }}>
 
-/**
- * Dispara la cortina, espera y recién entonces navega.
- * navigate() corre a los 620ms; la cortina se desvanece sola si la navegación tarda.
- */
-function useCurtainNav() {
-  const [curtain, setCurtain] = useState<{ label: string; leaving: boolean } | null>(null)
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([])
-
-  useEffect(() => () => timers.current.forEach(clearTimeout), [])
-
-  const run = (label: string, navigate: () => void | Promise<void>) => {
-    if (curtain) return
-    setCurtain({ label, leaving: false })
-    timers.current.push(setTimeout(() => { void navigate() }, 620))
-    timers.current.push(setTimeout(() => setCurtain(c => (c ? { ...c, leaving: true } : c)), 1400))
-    timers.current.push(setTimeout(() => setCurtain(null), 1900))
-  }
-
-  return { curtain, run, busy: !!curtain }
-}
-
-export default function Home() {
-  const [joinCode, setJoinCode] = useState('')
-  const [nickname, setNickname] = useState('')
-  const router = useRouter()
-  const { curtain, run, busy } = useCurtainNav()
-
-  const createRoom = async () => {
-    if (!nickname) return alert('Poné un nombre')
-    const code = randomCode()
-
-    const { data: room, error } = await supabase
-      .from('rooms')
-      .insert({ code })
-      .select()
-      .single()
-    if (error) return alert(error.message)
-
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .insert({ room_id: room.id, nickname })
-      .select()
-      .single()
-    if (playerError) return alert(playerError.message)
-
-    localStorage.setItem('playerId', player.id)
-    router.push(`/room/${code}`)
-  }
-
-  const joinRoom = async () => {
-    if (!nickname || !joinCode) return alert('Faltan datos')
-
-    const { data: room, error } = await supabase
-      .from('rooms')
-      .select()
-      .eq('code', joinCode.toUpperCase())
-      .single()
-    if (error || !room) return alert('Sala no encontrada')
-
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .insert({ room_id: room.id, nickname })
-      .select()
-      .single()
-    if (playerError) return alert(playerError.message)
-
-    localStorage.setItem('playerId', player.id)
-    router.push(`/room/${room.code}`)
-  }
-
-  return (
-    <>
-      <AnimatedBackground count={13} />
-
-      <div className={`page-shell${busy ? ' sg-shell-out' : ''}`} style={{ position: 'relative', zIndex: 1 }}>
-        <div className="brand-header">
-          <h1 className="brand-title">
-            {'SONGLIO'.split('').map((letter, i) => (
-              <span key={i}>{letter}</span>
-            ))}
-          </h1>
-          <span className="brand-kicker sg-rise sg-d1">GAME</span>
-        </div>
-
-        <div className="eq sg-rise sg-d2">
-          <span /><span /><span /><span />
-        </div>
-
-        <h2 className="page-title sg-rise sg-d3">Adiviná la canción</h2>
-        <p className="page-subtitle sg-rise sg-d4">Entrá con tu nombre o uníndote a una sala.</p>
-
-        <button
-          type="button"
-          onClick={() => run('Songlio Diario', () => router.push('/daily'))}
-          className="btn-principal sg-sheen sg-rise sg-d5"
-          style={{ width: 'min(100%, 320px)', marginBottom: 18 }}
-        >
-          Songlio Diario
-        </button>
-
-        <main className="page-card sg-breathe">
-          <label className="field-label" htmlFor="nickname">Tu nombre</label>
-          <input
-            id="nickname"
-            className="form-field"
-            placeholder="Tu nombre"
-            value={nickname}
-            onChange={e => setNickname(e.target.value)}
-          />
-
-          <button
-            type="button"
-            onClick={() => run('Creando sala', createRoom)}
-            className="btn-principal sg-sheen sg-sheen-slow"
-            style={{ width: '100%', marginTop: 14 }}
-          >
-            Crear sala nueva
-          </button>
-
-          <div className="divider"><span>O unite</span></div>
-
-          <div className="form-row">
-            <input
-              className="form-field"
-              placeholder="Código"
-              maxLength={4}
-              value={joinCode}
-              onChange={e => setJoinCode(e.target.value)}
-            />
-            <button
-              type="button"
-              onClick={() => run('Entrando a la sala', joinRoom)}
-              className="btn-principal"
-            >
-              Unirse
-            </button>
+          <div className="theme-classic" style={{ display: 'flex' }}>
+            <Link href="/songlio" className="hub-card" aria-label="Songlio" style={{ background: 'linear-gradient(180deg, rgba(247,201,72,0.05), rgba(0,0,0,0.4))' }}>
+              <span className="hub-icon">🎵</span>
+              <h2>Songlio</h2>
+            </Link>
           </div>
-        </main>
-      </div>
 
-      {curtain && <Curtain label={curtain.label} leaving={curtain.leaving} />}
-    </>
+          <div className="theme-futbol" style={{ display: 'flex' }}>
+            <Link href="/futbol" className="hub-card" aria-label="Fútbol" style={{ background: 'linear-gradient(180deg, rgba(38,255,106,0.05), rgba(0,0,0,0.4))' }}>
+              <span className="hub-icon">⚽</span>
+              <h2>Fútbol</h2>
+            </Link>
+          </div>
+
+          <div className="theme-gaming" style={{ display: 'flex' }}>
+            <Link href="/gaming" className="hub-card" aria-label="Videojuegos" style={{ background: 'linear-gradient(180deg, rgba(155,89,255,0.05), rgba(0,0,0,0.4))' }}>
+              <span className="hub-icon">🎮</span>
+              <h2>Videojuegos</h2>
+            </Link>
+          </div>
+
+        </div>
+      </div>
+    </div>
   )
 }

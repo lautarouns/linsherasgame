@@ -10,15 +10,35 @@
   --soft: rgba(255, 255, 255, 0.06);
   --soft-strong: rgba(255, 255, 255, 0.12);
   --field-bg: rgba(0, 0, 0, 0.32);
-  --accent: #f7c948;
-  --accent-hover: #ffdd7a;
-  --accent-text: #141207;
-  --accent-soft: rgba(247, 201, 72, 0.1);
-  --accent-line: rgba(247, 201, 72, 0.28);
-  --table-row: rgba(255, 255, 255, 0.032);
-  --table-row-alt: rgba(255, 255, 255, 0.022);
-  --font-display: 'Manrope', system-ui, -apple-system, sans-serif;
-  --font-code: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+
+ /* Default accent (amarillo) */
+ --accent: #f7c948;
+ --accent-hover: #ffdd7a;
+ --accent-text: #141207;
+ --accent-soft: rgba(247, 201, 72, 0.1);
+ --accent-line: rgba(247, 201, 72, 0.28);
+
+ --table-row: rgba(255, 255, 255, 0.032);
+ --table-row-alt: rgba(255, 255, 255, 0.022);
+ --font-display: 'Manrope', system-ui, -apple-system, sans-serif;
+ --font-code: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+/* Theme variants - apply .theme-futbol or .theme-gaming on <body> or a wrapper */
+.theme-futbol {
+ --accent: #26ff6a; /* bright green */
+ --accent-hover: #57ff92;
+ --accent-text: #04210a;
+ --accent-soft: rgba(38, 255, 106, 0.10);
+ --accent-line: rgba(38, 255, 106, 0.28);
+}
+
+.theme-gaming {
+ --accent: #9b59ff; /* vivid purple */
+ --accent-hover: #b78cff;
+ --accent-text: #1a0026;
+ --accent-soft: rgba(155, 89, 255, 0.10);
+ --accent-line: rgba(155, 89, 255, 0.28);
 }
 
 @theme inline {
@@ -42,8 +62,8 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(900px 520px at 50% -10%, rgba(247, 201, 72, 0.10), transparent 70%),
-    radial-gradient(700px 500px at 85% 100%, rgba(247, 201, 72, 0.05), transparent 70%),
+    radial-gradient(900px 520px at 50% -10%, var(--accent-soft), transparent 70%),
+    radial-gradient(700px 500px at 85% 100%, var(--accent-soft), transparent 70%),
     var(--background);
   color: var(--foreground);
   font-family: var(--font-display);
@@ -61,9 +81,9 @@ select {
 }
 
 @keyframes songlio-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(247, 201, 72, 0.35); }
-  70% { box-shadow: 0 0 0 18px rgba(247, 201, 72, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(247, 201, 72, 0); }
+  0% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  70% { box-shadow: 0 0 0 18px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
 }
 
 /* ---------- Home ---------- */
@@ -84,6 +104,130 @@ select {
   border-radius: 24px;
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.55);
   padding: 26px 24px;
+}
+
+/* Mini-games buttons row (big square cards) */
+.mini-games-row {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin: 18px 0;
+}
+
+.mini-game-card {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 220px;
+  aspect-ratio: 1 / 1; /* square */
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.18s ease;
+}
+
+/* Icon area uses the accent as background for contrast */
+.mini-game-card .mini-game-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 30px;
+  color: var(--accent-text);
+  background: var(--accent);
+  box-shadow: 0 10px 22px var(--accent-soft);
+}
+
+.mini-game-card .mini-game-title {
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 15px;
+}
+
+.mini-game-card:hover { transform: translateY(-6px); }
+
+/* Hub / Portal styles */
+.hub-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 72px 20px;
+}
+
+.hub-inner {
+  width: min(1100px, 96%);
+  text-align: center;
+}
+
+.hub-title {
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  color: #fff;
+  margin-bottom: 18px;
+  font-weight: 800;
+}
+
+.hub-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-top: 22px;
+}
+
+.hub-card {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.hub-card .hub-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 34px;
+  color: #111;
+}
+
+.hub-card .hub-title {
+  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.hub-card .hub-sub {
+  color: rgba(242,240,236,0.6);
+  font-size: 13px;
+}
+
+.hub-card:hover { transform: translateY(-8px); }
+
+.hub-card--music { --card-accent: rgba(247,201,72,0.14); }
+.hub-card--futbol { --card-accent: rgba(38,255,106,0.12); }
+.hub-card--gaming { --card-accent: rgba(155,89,255,0.12); }
+
+.hub-card:hover { box-shadow: 0 30px 60px var(--card-accent); }
+
+@media (max-width: 880px) {
+  .hub-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 520px) {
+  .hub-grid { grid-template-columns: 1fr; }
 }
 
 .brand-header {
@@ -182,14 +326,14 @@ select {
 }
 
 .daily-progress-step.is-done {
-  border-color: rgba(247, 201, 72, 0.26);
-  background: rgba(247, 201, 72, 0.12);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
   color: #fff;
 }
 
 .daily-progress-step.is-active {
-  border-color: rgba(247, 201, 72, 0.48);
-  box-shadow: 0 0 0 3px rgba(247, 201, 72, 0.12);
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .daily-audio-row {
@@ -351,8 +495,8 @@ select {
 .form-select:focus,
 .guess-input:focus {
   outline: none;
-  border-color: rgba(247, 201, 72, 0.55);
-  box-shadow: 0 0 0 4px rgba(247, 201, 72, 0.1);
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 .form-row {
@@ -383,7 +527,7 @@ select {
   cursor: pointer;
   white-space: nowrap;
   transition: transform 0.15s ease, background-color 0.18s ease;
-  box-shadow: 0 10px 26px rgba(247, 201, 72, 0.22);
+  box-shadow: 0 10px 26px var(--accent-soft);
 }
 
 .btn-principal:hover {
@@ -397,7 +541,7 @@ select {
 
 .btn-principal:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 4px rgba(247, 201, 72, 0.28);
+  box-shadow: 0 0 0 4px var(--accent-line);
 }
 
 .btn-secondary {
@@ -540,8 +684,8 @@ select {
 
 .player-row:first-child,
 .score-row:first-child {
-  background: rgba(247, 201, 72, 0.09);
-  border-color: rgba(247, 201, 72, 0.26);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
 }
 
 .player-row strong,
@@ -620,14 +764,13 @@ select {
 }
 
 .segment-button:hover {
-  border-color: rgba(247, 201, 72, 0.42);
-  transform: translateY(-1px);
+  border-color: var(--accent-line);
 }
 
 .segment-button.is-selected {
-  background: rgba(247, 201, 72, 0.12);
-  border-color: rgba(247, 201, 72, 0.45);
-  box-shadow: inset 0 0 0 1px rgba(247, 201, 72, 0.32);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
   color: var(--accent);
 }
 
@@ -881,8 +1024,8 @@ select {
 }
 
 .leaderboard-row:first-child {
-  background: rgba(247, 201, 72, 0.08);
-  border-color: rgba(247, 201, 72, 0.22);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
 }
 
 .leaderboard-row > span:last-child {
@@ -907,10 +1050,9 @@ select {
 }
 
 .leaderboard-row:first-child .leaderboard-rank {
-  background: rgba(247, 201, 72, 0.18);
+  background: var(--accent-soft);
   color: var(--accent);
 }
-
 /* ---------- Scoreboard ---------- */
 
 .scoreboard-panel {
@@ -1273,3 +1415,54 @@ select {
   .app-main { padding-bottom: 82px; }
 }
 @import "./songlio-animations.css";
+
+/* ---- New hub visuals & animated title ---- */
+@keyframes rgb-text {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animated-title {
+  background: linear-gradient(90deg, #f7c948, #26ff6a, #9b59ff, #f7c948);
+  background-size: 300%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rgb-text 6s linear infinite;
+  font-weight: 900;
+}
+
+.hub-card {
+  min-height: 380px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 24px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08); /* Borde base */
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  text-decoration: none;
+  color: #fff;
+}
+
+.hub-card:hover {
+  transform: translateY(-8px);
+  border-color: var(--accent);
+  box-shadow: 0 15px 45px var(--accent-soft); /* Esto hace la magia del neón */
+}
+
+.hub-icon { font-size: 80px; line-height: 1; }
+
+/* Make sure hub card titles look consistent */
+.hub-card h2 { margin: 0; font-size: 20px; font-weight: 800; color: #fff; }
+
+/* Responsive adjustments */
+@media (max-width: 880px) {
+  .hub-card { width: 45%; min-height: 320px; }
+}
+@media (max-width: 520px) {
+  .hub-card { width: 100%; min-height: 220px; }
+}

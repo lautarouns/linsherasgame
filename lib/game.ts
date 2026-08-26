@@ -61,6 +61,18 @@ export async function startSurvivalPhase(roomId: string, seconds = 75) {
   }).eq('id', roomId)
 }
 
+// Spanish alias / new function for Duelo de Carreras
+export async function startDueloPhase(roomId: string, seconds = 60) {
+  const deadline = new Date(nowSynced() + seconds * 1000).toISOString()
+  await supabase.from('rooms').update({
+    status: 'playing',
+    game_mode: 'duelo',
+    current_round: 1,
+    total_rounds: 0,
+    round_deadline: deadline
+  }).eq('id', roomId)
+}
+
 // Arranca el modo Duelo: arma `totalRounds` rondas a partir del mismo pool de
 // canciones que usa Supervivencia (cacheado en Supabase), idempotente igual que
 // startPlayingPhase — si ya hay duelos armados para esta sala, no los reharagas.
