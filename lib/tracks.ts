@@ -12,19 +12,19 @@ export const POPULAR_ARTISTS = [
   'Duki', 'Bizarrap', 'Emilia', 'Trueno', 'Nicki Nicole', 'Wos',
   'Paulo Londra', 'Tini', 'La Joaqui', 'Khea', 'Cazzu', 'Milo J',
   'YSY A', 'Tiago PZK', 'Bad Bunny', 'Karol G', 'Feid', 'Rauw Alejandro',
-  'Shakira', 'Ozuna', 'Maluma', 'J Balvin', 'Peso Pluma', 'Fuerza Regida',
+  'Shakira', 'Ozuna', 'Maluma', 'J Balvin', 'Peso Pluma', 'Fuerza Regida','LINKIN PARK',
   'Rels B', 'Taylor Swift', 'Drake', 'The Weeknd', 'Billie Eilish', 'Ariana Grande',
   'Post Malone', 'Travis Scott', 'Olivia Rodrigo', 'Doja Cat', 'SZA', 'Kendrick Lamar',
   'Bruno Mars', 'Beyoncé', 'Justin Bieber', 'Chris Brown', 'Dua Lipa', 'Ed Sheeran',
-  'Coldplay', 'David Guetta', 'Rosalía', 'Stromae', 'Aitana', 'Quevedo',
+  'Coldplay', 'David Guetta', 'Rosalía', 'Stromae', 'Aitana', 'Quevedo', 'Joji', 'Clúster',
   'Sam Smith', 'Skrillex', 'Calvin Harris', 'Imagine Dragons', 'Måneskin', 'ABBA',
   'Metallica', 'Iron Maiden', 'Black Sabbath', 'Slipknot', 'System of a Down', 'Megadeth',
   'Slayer', 'Pantera', 'Rammstein', 'Judas Priest', 'Korn', 'Guns N Roses',
   'AC/DC', 'Sepultura', 'Deftones', 'Nirvana', 'Michael Jackson', 'Madonna',
   'Queen', 'Duran Duran', 'Whitney Houston', 'Cyndi Lauper', 'Tears for Fears', 'a-ha',
   'Culture Club', 'Wham', 'Prince', 'Eurythmics', 'Bon Jovi', 'Soda Stereo',
-  'Hombres G', 'Eminem', 'Jay-Z', 'Kanye West', 'Tyler the Creator', 'Nicki Minaj','Zell',
-  '50 Cent', 'Snoop Dogg', 'Dr. Dre', 'Cardi B', 'A$AP Rocky', 'Wu-Tang Clan','Little Boogie',
+  'Hombres G', 'Eminem', 'Jay-Z', 'Kanye West', 'Tyler the Creator', 'Nicki Minaj',
+  '50 Cent', 'Snoop Dogg', 'Dr. Dre', 'Cardi B', 'A$AP Rocky', 'Wu-Tang Clan',
   'Notorious B.I.G.', 'Tupac', 'J. Cole', 'Lil Wayne', 'Plan B', 'Chencho Corleone',
   'Don omar', 'Daddy Yankee', 'Wisin y Yandel', 'Justin Quiles', 'Radiohead', 'Zion & Lennox',
   'Arcangel', 'Nicky Jam', 'Sech', 'Myke Towers', 'XXXTENTACION', 'Juice WRLD',
@@ -86,7 +86,7 @@ async function fetchArtist(artist: string): Promise<ArtistFetchResult> {
 // Ejecuta las búsquedas de a tandas para no saturar el límite de la API de iTunes.
 // Los artistas que fallan (red caída o 403 puntual) se reintentan una vez más al final,
 // en vez de perderse en silencio como pasaba antes.
-async function fetchInBatches(artists: string[], batchSize = 5, delayMs = 400): Promise<ArtistFetchResult[]> {
+async function fetchInBatches(artists: string[], batchSize = 3, delayMs = 700): Promise<ArtistFetchResult[]> {
   const results: ArtistFetchResult[] = []
   for (let i = 0; i < artists.length; i += batchSize) {
     const batch = artists.slice(i, i + batchSize)
@@ -97,16 +97,18 @@ async function fetchInBatches(artists: string[], batchSize = 5, delayMs = 400): 
     }
   }
 
+  // Si alguno falló, probablemente fue por el límite de la API — le damos varios
+  // segundos de aire antes de reintentar, uno por vez, en vez de mandarlo enseguida
   const failed = results.filter(r => !r.data)
   if (failed.length > 0) {
-    await new Promise(resolve => setTimeout(resolve, delayMs))
+    await new Promise(resolve => setTimeout(resolve, 3000))
     for (const r of failed) {
       const retry = await fetchArtist(r.artist)
       if (retry.data) {
         const idx = results.findIndex(x => x.artist === r.artist)
         if (idx !== -1) results[idx] = retry
       }
-      await new Promise(resolve => setTimeout(resolve, delayMs))
+      await new Promise(resolve => setTimeout(resolve, 1200))
     }
   }
 
