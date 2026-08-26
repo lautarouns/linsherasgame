@@ -27,7 +27,11 @@ export const POPULAR_ARTISTS = [
   'Prince', 'Eurythmics', 'Bon Jovi', 'Soda Stereo', 'Hombres G',
   'Eminem', 'Jay-Z', 'Kanye West', 'Tyler the Creator', 'Nicki Minaj',
   '50 Cent', 'Snoop Dogg', 'Dr. Dre', 'Cardi B', 'A$AP Rocky',
-  'Wu-Tang Clan', 'Notorious B.I.G.', 'Tupac', 'J. Cole', 'Lil Wayne'
+  'Wu-Tang Clan', 'Notorious B.I.G.', 'Tupac', 'J. Cole', 'Lil Wayne',
+  'Plan B', 'Chencho Corleone', 'Don omar', 'Daddy Yankee', 'Wisin y Yandel',
+  'Justin Quiles', 'Radiohead', 'Zion & Lennox', 'Arcangel', 'Nicky Jam', 'Sech', 'Myke Towers',
+  'XXXTENTACION', 'Juice WRLD', 'Lil Peep', 'Pop Smoke', 'Lil Baby','Danny Ocean', 'Rauw Alejandro', 'Jhay Cortez', 'J Alvarez',
+  'Prince Royce', 'Romeo Santos', 'Tego Calderon', 'Cosculluela'
 ]
 
 const POOL_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7 // 7 días

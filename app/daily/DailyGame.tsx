@@ -4,31 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getDailyPlayerId } from '@/lib/dailyPlayer'
+import { Track, normalize, baseTitle, hashStringToInt, loadTrackPool } from '@/lib/tracks'
 
 const DAILY_SEGMENTS = [0.5, 2, 4.5, 7]
-
-type Track = {
-  title: string
-  artist: string
-  cover: string
-  previewUrl: string
-}
 
 type Attempt = {
   text: string
   artistMatch: boolean
-}
-
-function normalize(value: string) {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]/g, '')
-}
-
-function baseTitle(trackName: string) {
-  return trackName.split('(')[0].split('[')[0].trim()
 }
 
 function todayStr() {
@@ -55,8 +37,11 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
   const [isLose, setIsLose] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
+  // Pool compartido con Supervivencia y Duelo (cacheado en Supabase), usado acá
+  // solo para elegir la canción del día y para filtrar el buscador localmente.
+  const [pool, setPool] = useState<Track[]>([])
+
   const [suggestions, setSuggestions] = useState<Track[]>([])
-  const [isSearching, setIsSearching] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [volume, setVolume] = useState(0.7)
 
@@ -87,6 +72,15 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
     }, { onConflict: 'date_id,player_id' })
   }, [targetDate])
 
+  // Cargar el pool una sola vez al montar (viene del caché compartido; no pega a iTunes salvo que esté vencido)
+  useEffect(() => {
+    let cancelled = false
+    loadTrackPool()
+      .then(tracks => { if (!cancelled) setPool(tracks) })
+      .catch(e => console.error('Error cargando el pool de canciones', e))
+    return () => { cancelled = true }
+  }, [])
+
   // CARGA DE CANCIÓN + PROGRESO GUARDADO
   useEffect(() => {
     async function fetchDailyTrack() {
@@ -97,8 +91,6 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
         setAttemptHistory([])
         setCurrentAttempt(0)
         setMessage(null)
-
-        const [yyyy, mm, dd] = targetDate.split('-')
 
         const { data: existingSong } = await supabase
           .from('daily_songs')
@@ -116,33 +108,21 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
             previewUrl: existingSong.preview_url
           }
         } else if (isToday) {
-          // Solo se genera una canción nueva si es el día de hoy y todavía no existe
-          const res = await fetch('https://itunes.apple.com/us/rss/topsongs/limit=200/json')
-          if (!res.ok) throw new Error('Error al conectar con la API')
+          // Solo se genera una canción nueva si es el día de hoy y todavía no existe.
+          // Se elige de forma determinística (misma semilla = misma canción para todos)
+          // dentro del mismo pool que usan Supervivencia y Duelo.
+          const todaysPool = await loadTrackPool()
+          if (todaysPool.length === 0) throw new Error('No se encontraron canciones válidas')
 
-          const data = await res.json()
-          const entries = data.feed.entry
-
-          const validTracks = entries.filter((entry: any) =>
-            entry.link.some((l: any) => l.attributes.title === 'Preview')
-          )
-
-          if (validTracks.length === 0) throw new Error('No se encontraron canciones válidas')
-
-          const seed = parseInt(`${yyyy}${mm}${dd}`)
-          const index = seed % validTracks.length
-          const selectedEntry = validTracks[index]
-
-          const audioLink = selectedEntry.link.find((l: any) => l.attributes.title === 'Preview').attributes.href
-          const imageArray = selectedEntry['im:image']
-          const coverLink = imageArray[imageArray.length - 1].label
+          const seed = hashStringToInt(targetDate)
+          const selected = todaysPool[seed % todaysPool.length]
 
           const newSong = {
             date_id: targetDate,
-            title: selectedEntry['im:name'].label,
-            artist: selectedEntry['im:artist'].label,
-            cover: coverLink,
-            preview_url: audioLink
+            title: selected.title,
+            artist: selected.artist,
+            cover: selected.cover,
+            preview_url: selected.previewUrl
           }
 
           await supabase.from('daily_songs').upsert(newSong)
@@ -192,39 +172,26 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
     fetchDailyTrack()
   }, [targetDate, isToday])
 
-  // Buscador en vivo
+  // Buscador en vivo: filtra el pool ya cargado en memoria, sin pegarle a la red
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (guess.trim().length < 2) {
+    const timer = setTimeout(() => {
+      const q = guess.trim().toLowerCase()
+      if (q.length < 2) {
         setSuggestions([])
         setShowSuggestions(false)
         return
       }
       if (isWin || isLose) return
 
-      try {
-        setIsSearching(true)
-        setShowSuggestions(true)
-        const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(guess)}&entity=song&limit=5`)
-        const data = await res.json()
-
-        const tracks = data.results.map((r: any) => ({
-          title: r.trackName,
-          artist: r.artistName,
-          cover: r.artworkUrl100,
-          previewUrl: r.previewUrl
-        }))
-
-        setSuggestions(tracks)
-      } catch (e) {
-        console.error('Error buscando sugerencias:', e)
-      } finally {
-        setIsSearching(false)
-      }
-    }, 400)
+      setShowSuggestions(true)
+      const matches = pool
+        .filter(t => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q))
+        .slice(0, 6)
+      setSuggestions(matches)
+    }, 150)
 
     return () => clearTimeout(timer)
-  }, [guess, isWin, isLose])
+  }, [guess, isWin, isLose, pool])
 
   useEffect(() => {
     return () => {
@@ -437,21 +404,17 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
             disabled={isWin || isLose}
           />
 
-          {showSuggestions && (suggestions.length > 0 || isSearching) && (
+          {showSuggestions && suggestions.length > 0 && (
             <ul className="track-results" style={{ marginTop: 0 }}>
-              {isSearching ? (
-                <li style={{ padding: '12px', textAlign: 'center', color: 'var(--muted)', fontSize: 14, background: 'var(--table-row)', borderRadius: 16 }}>Buscando...</li>
-              ) : (
-                suggestions.map((track, i) => (
-                  <li key={i} className="track-result" onClick={() => handleSelectSuggestion(track)}>
-                    <img src={track.cover} alt="" />
-                    <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-                      <strong>{track.title}</strong>
-                      <span style={{ fontSize: 13, color: 'var(--muted)' }}>{track.artist}</span>
-                    </div>
-                  </li>
-                ))
-              )}
+              {suggestions.map((track, i) => (
+                <li key={i} className="track-result" onClick={() => handleSelectSuggestion(track)}>
+                  <img src={track.cover} alt="" />
+                  <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+                    <strong>{track.title}</strong>
+                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>{track.artist}</span>
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
 
