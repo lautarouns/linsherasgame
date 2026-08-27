@@ -31,6 +31,13 @@ export default function HubPage() {
             </Link>
           </div>
 
+          <div className="theme-anime" style={{ display: 'flex' }}>
+            <Link href="/anime" className="hub-card" aria-label="Anime" style={{ background: 'linear-gradient(180deg, rgba(255,61,113,0.05), rgba(0,0,0,0.4))' }}>
+              <span className="hub-icon">🎌</span>
+              <h2>Anime</h2>
+            </Link>
+          </div>
+
         </div>
       </div>
     </div>

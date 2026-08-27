@@ -41,6 +41,14 @@
  --accent-line: rgba(155, 89, 255, 0.28);
 }
 
+.theme-anime {
+ --accent: #ff3d71; /* vivid pink-red */
+ --accent-hover: #ff6f96;
+ --accent-text: #200008;
+ --accent-soft: rgba(255, 61, 113, 0.10);
+ --accent-line: rgba(255, 61, 113, 0.28);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

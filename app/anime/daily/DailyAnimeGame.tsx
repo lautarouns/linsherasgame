@@ -5,66 +5,64 @@ import { seededShuffle, normalize } from '@/lib/tracks'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-type VideoGame = {
+type Anime = {
   id: string
   title: string
   cover_url: string | null
   synopsis: string
   secondary_character: string
-  game_modes: string[]
-  platform: string
+  genre: string
   release_year: number
+  studio: string
   features: string[]
 }
 
 const HINT_KIND = [
-  'Sinopsis',
   'Personaje secundario',
-  'Modo de juego',
-  'Modo de juego',
-  'Modo de juego',
-  'Plataforma',
+  'Género',
+  'Sinopsis',
   'Año de lanzamiento',
-  ...Array.from({ length: 5 }, () => 'Característica')
+  'Estudio de animación',
+  ...Array.from({ length: 7 }, () => 'Característica')
 ]
 
-export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
+export default function DailyAnimeGame({ dateStr }: { dateStr: string }) {
   const router = useRouter()
-  const [targetGame, setTargetGame] = useState<VideoGame | null>(null)
+  const [targetAnime, setTargetAnime] = useState<Anime | null>(null)
   const [hints, setHints] = useState<string[]>([])
   const [status, setStatus] = useState<'playing' | 'win' | 'loss'>('playing')
   const [attempt, setAttempt] = useState(1)
   const [guess, setGuess] = useState('')
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Pool completo de juegos (ya se trae igual para elegir el del día), usado
+  // Pool completo de animes (ya se trae igual para elegir el del día), usado
   // acá para armar las sugerencias del buscador sin pegarle a la base de nuevo.
-  const [pool, setPool] = useState<VideoGame[]>([])
-  const [suggestions, setSuggestions] = useState<VideoGame[]>([])
+  const [pool, setPool] = useState<Anime[]>([])
+  const [suggestions, setSuggestions] = useState<Anime[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
 
-  // 1. Cargar el juego del día y el progreso guardado
+  // 1. Cargar el anime del día y el progreso guardado
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const { data } = await supabase.from('video_games').select('*')
-      const allGames = (data ?? []) as VideoGame[]
-      const shuffled = seededShuffle(allGames, dateStr)
-      const target = shuffled[0] as VideoGame | undefined
+      const { data } = await supabase.from('animes').select('*')
+      const allAnimes = (data ?? []) as Anime[]
+      const shuffled = seededShuffle(allAnimes, dateStr)
+      const target = shuffled[0] as Anime | undefined
 
       if (!cancelled && target) {
-        setPool(allGames)
-        setTargetGame(target)
+        setPool(allAnimes)
+        setTargetAnime(target)
         setHints([
-          target.synopsis,
           target.secondary_character,
-          ...(target.game_modes ?? []),
-          target.platform,
+          target.genre,
+          target.synopsis,
           String(target.release_year),
+          target.studio,
           ...(target.features ?? [])
         ])
 
-        const saved = localStorage.getItem(`gaming_daily_${dateStr}`)
+        const saved = localStorage.getItem(`anime_daily_${dateStr}`)
         if (saved) {
           try {
             const parsed = JSON.parse(saved)
@@ -82,7 +80,7 @@ export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
   // 2. Guardar progreso (solo una vez que ya se cargó la partida inicial)
   useEffect(() => {
     if (!isLoaded) return
-    localStorage.setItem(`gaming_daily_${dateStr}`, JSON.stringify({ status, attempt }))
+    localStorage.setItem(`anime_daily_${dateStr}`, JSON.stringify({ status, attempt }))
   }, [status, attempt, dateStr, isLoaded])
 
   // 3. Buscador en vivo: filtra el pool ya cargado en memoria, sin pegarle a la red
@@ -94,7 +92,7 @@ export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
         return
       }
       const matches = pool
-        .filter(g => g.title.toLowerCase().includes(q))
+        .filter(a => a.title.toLowerCase().includes(q))
         .slice(0, 8)
       setSuggestions(matches)
     }, 150)
@@ -105,9 +103,9 @@ export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
 
   const submitGuess = (guessTitle?: string) => {
     const candidate = (guessTitle ?? guess).trim()
-    if (status !== 'playing' || !candidate || !targetGame) return
+    if (status !== 'playing' || !candidate || !targetAnime) return
 
-    const isCorrect = normalize(candidate) === normalize(targetGame.title)
+    const isCorrect = normalize(candidate) === normalize(targetAnime.title)
 
     if (isCorrect) {
       setStatus('win')
@@ -132,9 +130,9 @@ export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
     setShowSuggestions(false)
   }
 
-  if (!isLoaded || !targetGame) {
+  if (!isLoaded || !targetAnime) {
     return (
-      <div className="theme-gaming">
+      <div className="theme-anime">
         <div className="page-shell">
           <p className="status-box">Cargando desafío...</p>
         </div>
@@ -143,7 +141,7 @@ export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
   }
 
   return (
-    <div className="theme-gaming">
+    <div className="theme-anime">
       <div className="page-shell">
         <div className="daily-card page-card">
           <div className="daily-header">
@@ -152,12 +150,12 @@ export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
               <h1 className="daily-title">Desafío Diario</h1>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Link href="/gaming/archive" className="btn-secondary">Archivo</Link>
-              <button onClick={() => router.push('/gaming')} className="btn-secondary">Volver</button>
+              <Link href="/anime/archive" className="btn-secondary">Archivo</Link>
+              <button onClick={() => router.push('/anime')} className="btn-secondary">Volver</button>
             </div>
           </div>
           <p className="page-subtitle" style={{ textAlign: 'left', marginBottom: 24 }}>
-            Adiviná el juego destapando pistas: primero la sinopsis, después un personaje secundario, y por último características cada vez más obvias.
+            Adiviná el anime destapando pistas: primero un personaje secundario muy poco conocido, después el género, la sinopsis, el año y el estudio, y por último características cada vez más obvias.
           </p>
 
           {/* Pistas reveladas progresivamente */}
@@ -199,7 +197,7 @@ export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
                 onChange={e => { setGuess(e.target.value); setShowSuggestions(true) }}
                 onFocus={() => { if (guess.trim().length >= 2) setShowSuggestions(true) }}
                 onKeyDown={e => { if (e.key === 'Enter') submitGuess() }}
-                placeholder="Escribí el nombre del juego"
+                placeholder="Escribí el nombre del anime"
                 className="guess-input"
                 autoFocus
                 autoComplete="off"
@@ -207,10 +205,10 @@ export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
 
               {showSuggestions && suggestions.length > 0 && (
                 <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {suggestions.map(g => (
+                  {suggestions.map(a => (
                     <li
-                      key={g.id}
-                      onClick={() => submitGuess(g.title)}
+                      key={a.id}
+                      onClick={() => submitGuess(a.title)}
                       style={{
                         padding: '10px 14px',
                         borderRadius: 10,
@@ -220,7 +218,7 @@ export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
                         fontWeight: 600
                       }}
                     >
-                      {g.title}
+                      {a.title}
                     </li>
                   ))}
                 </ul>
@@ -243,15 +241,15 @@ export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
             </div>
           ) : (
             <div className={`daily-result ${status === 'win' ? 'is-win' : 'is-loss'}`} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              {targetGame.cover_url && (
-                <img src={targetGame.cover_url} alt={targetGame.title} style={{ width: 80, height: 80, borderRadius: 16, objectFit: 'cover' }} />
+              {targetAnime.cover_url && (
+                <img src={targetAnime.cover_url} alt={targetAnime.title} style={{ width: 80, height: 80, borderRadius: 16, objectFit: 'cover' }} />
               )}
               <div>
                 <h3 style={{ margin: '0 0 4px', fontSize: 24 }}>
                   {status === 'win' ? '¡Ganaste!' : '¡Perdiste!'}
                 </h3>
                 <p style={{ margin: 0, color: 'var(--muted)' }}>
-                  El juego era <strong>{targetGame.title}</strong>
+                  El anime era <strong>{targetAnime.title}</strong>
                 </p>
               </div>
             </div>

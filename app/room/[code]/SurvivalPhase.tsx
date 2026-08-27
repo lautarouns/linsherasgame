@@ -157,12 +157,18 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
         setSuggestions([])
         return
       }
-      const matches = tracks
-        .filter(track =>
-          track.title.toLowerCase().includes(q) || track.artist.toLowerCase().includes(q)
-        )
-        .slice(0, 15)
-      setSuggestions(matches)
+      const matches = tracks.filter(track =>
+        track.title.toLowerCase().includes(q) || track.artist.toLowerCase().includes(q)
+      )
+
+      // Mezclamos el orden: si no, el tema que está sonando queda siempre
+      // primero (por cómo recorremos el pool en orden a medida que avanza
+      // la partida), y eso delata cuál es sin que el jugador acierte nada.
+      for (let i = matches.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[matches[i], matches[j]] = [matches[j], matches[i]]
+      }
+      setSuggestions(matches.slice(0, 15))
     }, 150)
     return () => clearTimeout(t)
   }, [guess, isFinished, tracks])
