@@ -1,44 +1,105 @@
 import Link from 'next/link'
 
+type GameStatus = 'unplayed' | 'progress' | 'solved'
+
+const GAMES = [
+  {
+    href: '/songlio',
+    label: 'Songlio',
+    tagline: 'Adiviná la canción',
+    icon: '🎵',
+    theme: 'theme-classic',
+    tint: 'rgba(247,201,72',
+    // TODO: reemplazar por el progreso real del día
+    status: 'unplayed' as GameStatus,
+    guesses: 0,
+  },
+  {
+    href: '/futbol',
+    label: 'Fútbol',
+    tagline: 'Adiviná el jugador',
+    icon: '⚽',
+    theme: 'theme-futbol',
+    tint: 'rgba(38,255,106',
+    status: 'progress' as GameStatus,
+    guesses: 3,
+  },
+  {
+    href: '/gaming',
+    label: 'Videojuegos',
+    tagline: 'Adiviná el juego',
+    icon: '🎮',
+    theme: 'theme-gaming',
+    tint: 'rgba(155,89,255',
+    status: 'unplayed' as GameStatus,
+    guesses: 0,
+  },
+  {
+    href: '/anime',
+    label: 'Anime',
+    tagline: 'Adiviná el anime',
+    icon: '🎌',
+    theme: 'theme-anime',
+    tint: 'rgba(255,61,113',
+    status: 'solved' as GameStatus,
+    guesses: 4,
+  },
+]
+
+const MAX_GUESSES = 6
+
+function statusLabel(status: GameStatus, guesses: number) {
+  if (status === 'solved') return 'RESUELTO'
+  if (status === 'progress') return `${guesses}/${MAX_GUESSES} INTENTOS`
+  return 'SIN JUGAR'
+}
+
 export default function HubPage() {
-  const bg = `radial-gradient(500px 300px at 8% 10%, rgba(247,201,72,0.04), transparent 20%), radial-gradient(400px 260px at 12% 90%, rgba(38,255,106,0.03), transparent 20%), radial-gradient(420px 300px at 88% 18%, rgba(155,89,255,0.04), transparent 18%), var(--background)`
+  const bg = `radial-gradient(700px 420px at 12% -6%, rgba(247,201,72,0.05), transparent 60%), radial-gradient(600px 400px at 92% 8%, rgba(155,89,255,0.05), transparent 60%), radial-gradient(520px 360px at 30% 108%, rgba(38,255,106,0.035), transparent 60%), var(--background)`
+
+  const today = new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'long' }).format(new Date())
+
+  // TODO: reemplazar por la racha real del usuario
+  const streak = 12
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, padding: '72px 20px' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', textAlign: 'center' }}>
-        <h1 className="animated-title" style={{ fontSize: '3.5rem', margin: 0 }}>Linsheradle</h1>
+    <div style={{ minHeight: '100vh', background: bg, padding: '56px 20px 120px' }}>
+      <div style={{ maxWidth: 1160, margin: '0 auto' }}>
 
-        <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap', justifyContent: 'center', marginTop: 40 }}>
-
-          <div className="theme-classic" style={{ display: 'flex' }}>
-            <Link href="/songlio" className="hub-card" aria-label="Songlio" style={{ background: 'linear-gradient(180deg, rgba(247,201,72,0.05), rgba(0,0,0,0.4))' }}>
-              <span className="hub-icon">🎵</span>
-              <h2>Songlio</h2>
-            </Link>
+        <header className="hub-header">
+          <div className="hub-header-text">
+            <div className="hub-eyebrow">{today}</div>
+            <h1 className="animated-title" style={{ fontSize: '3.5rem', margin: 0, lineHeight: 1 }}>Linsheradle</h1>
+            <p className="hub-sub">Cuatro juegos diarios. Uno nuevo cada día a medianoche.</p>
           </div>
 
-          <div className="theme-futbol" style={{ display: 'flex' }}>
-            <Link href="/futbol" className="hub-card" aria-label="Fútbol" style={{ background: 'linear-gradient(180deg, rgba(38,255,106,0.05), rgba(0,0,0,0.4))' }}>
-              <span className="hub-icon">⚽</span>
-              <h2>Fútbol</h2>
-            </Link>
+          <div className="hub-streak">
+            <span className="hub-streak-label">Racha</span>
+            <span className="hub-streak-value">{streak}</span>
           </div>
+        </header>
 
-          <div className="theme-gaming" style={{ display: 'flex' }}>
-            <Link href="/gaming" className="hub-card" aria-label="Videojuegos" style={{ background: 'linear-gradient(180deg, rgba(155,89,255,0.05), rgba(0,0,0,0.4))' }}>
-              <span className="hub-icon">🎮</span>
-              <h2>Videojuegos</h2>
-            </Link>
-          </div>
-
-          <div className="theme-anime" style={{ display: 'flex' }}>
-            <Link href="/anime" className="hub-card" aria-label="Anime" style={{ background: 'linear-gradient(180deg, rgba(255,61,113,0.05), rgba(0,0,0,0.4))' }}>
-              <span className="hub-icon">🎌</span>
-              <h2>Anime</h2>
-            </Link>
-          </div>
-
+        <div className="hub-grid">
+          {GAMES.map((game) => (
+            <div key={game.href} className={game.theme} style={{ display: 'flex' }}>
+              <Link
+                href={game.href}
+                className="hub-card hub-card-v2"
+                aria-label={game.label}
+                style={{ background: `linear-gradient(180deg, ${game.tint},0.06), rgba(0,0,0,0.4))` }}
+              >
+                <span className="hub-icon" style={{ filter: `drop-shadow(0 10px 24px ${game.tint},0.32))` }}>{game.icon}</span>
+                <h2>{game.label}</h2>
+                <p className="hub-card-tagline">{game.tagline}</p>
+                <span className="hub-status" data-status={game.status}>
+                  <span className="hub-status-dot" />
+                  {statusLabel(game.status, game.guesses)}
+                </span>
+              </Link>
+            </div>
+          ))}
         </div>
+
       </div>
     </div>
   )
