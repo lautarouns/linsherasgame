@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { nowSynced } from '@/lib/serverTime'
-import { baseTitle, normalize } from '@/lib/tracks'
+import { baseTitle, normalize, loadTrackPool, Track } from '@/lib/tracks'
 
 const DEFAULT_ROUND_SECONDS = 20
 const REVEAL_SECONDS = 4
@@ -38,6 +38,21 @@ export default function DuelPhase({
   const advanceScheduled = useRef(false)
   const isSubmitting = useRef(false)
 
+  // Pool compartido de canciones (el mismo que usan Supervivencia y Diario),
+  // cargado una sola vez al entrar y usado solo para sugerir mientras se escribe.
+  const [pool, setPool] = useState<Track[]>([])
+  const [suggestions, setSuggestions] = useState<Track[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+
+  // 0. Cargar el pool de canciones una sola vez (viene del caché compartido, no pega a iTunes salvo que esté vencido)
+  useEffect(() => {
+    let cancelled = false
+    loadTrackPool()
+      .then(tracks => { if (!cancelled) setPool(tracks) })
+      .catch(e => console.error('Error cargando el pool de canciones', e))
+    return () => { cancelled = true }
+  }, [])
+
   // 1. Cargar la ronda actual (la fila de `duels` correspondiente) y resetear estado local
   useEffect(() => {
     let cancelled = false
@@ -48,6 +63,8 @@ export default function DuelPhase({
       setIWon(false)
       setShowReveal(false)
       setSecondsLeft(roundDuration)
+      setSuggestions([])
+      setShowSuggestions(false)
       advanceScheduled.current = false
       isSubmitting.current = false
 
@@ -99,7 +116,7 @@ export default function DuelPhase({
     }
   }, [volume, duel])
 
-  // 4. Cronómetro + avance automático (lo maneja el host, igual que en Clásico)
+  // 4. Cronómetro: solo cuenta el tiempo y detecta cuándo se cumplió (por reloj o porque alguien ganó)
   useEffect(() => {
     const tick = () => {
       const diff = Math.max(0, Math.ceil((new Date(roundDeadline).getTime() - nowSynced()) / 1000))
@@ -109,33 +126,24 @@ export default function DuelPhase({
         setShowReveal(true)
         audioRef.current?.pause()
       }
-
-      if (diff === 0 && isHost && !advanceScheduled.current) {
-        advanceScheduled.current = true
-        setTimeout(() => {
-          if (currentRound >= totalRounds) {
-            supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
-              .then(({ error }) => { if (error) console.error(error) })
-          } else {
-            supabase.from('rooms').update({
-              current_round: currentRound + 1,
-              round_deadline: new Date(nowSynced() + roundDuration * 1000).toISOString()
-            }).eq('id', roomId)
-              .then(({ error }) => { if (error) console.error(error) })
-          }
-        }, REVEAL_SECONDS * 1000)
-      }
     }
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [roundDeadline, isHost, currentRound, totalRounds, roomId, showReveal, roundDuration])
+  }, [roundDeadline, showReveal])
 
-  // 5. Si alguien ganó, el host también programa el avance automático (por si el timer normal no llegó a 0 todavía)
+  // 5. Avance de ronda: ÚNICO punto de control. Se dispara ni bien la ronda
+  // termina (por tiempo agotado o porque alguien ganó, lo que pase primero),
+  // se agenda una sola vez por ronda gracias al candado, y calcula la duración
+  // de la siguiente ronda una única vez, en el momento en que efectivamente
+  // arranca — así nunca puede quedar más corta por una doble programación.
   useEffect(() => {
-    if (!isHost || !duel?.winner_player_id || advanceScheduled.current) return
+    if (!isHost || advanceScheduled.current) return
+    const roundEnded = !!duel?.winner_player_id || secondsLeft === 0
+    if (!roundEnded) return
+
     advanceScheduled.current = true
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       if (currentRound >= totalRounds) {
         supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
           .then(({ error }) => { if (error) console.error(error) })
@@ -147,18 +155,45 @@ export default function DuelPhase({
           .then(({ error }) => { if (error) console.error(error) })
       }
     }, REVEAL_SECONDS * 1000)
-  }, [duel?.winner_player_id, isHost, currentRound, totalRounds, roomId, roundDuration])
 
-  const submitGuess = useCallback(async () => {
-    if (!duel || duel.winner_player_id || !guess.trim() || showReveal) return
+    return () => clearTimeout(timer)
+  }, [isHost, duel?.winner_player_id, secondsLeft, currentRound, totalRounds, roomId, roundDuration])
+
+  // 6. Buscador en vivo: filtra el pool ya cargado en memoria, sin pegarle a la red.
+  // Se mezcla el orden para no delatar el tema actual por su posición en la lista.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const q = guess.trim().toLowerCase()
+      if (q.length < 2 || showReveal || pool.length === 0) {
+        setSuggestions([])
+        return
+      }
+      const matches = pool.filter(track =>
+        track.title.toLowerCase().includes(q) || track.artist.toLowerCase().includes(q)
+      )
+      for (let i = matches.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[matches[i], matches[j]] = [matches[j], matches[i]]
+      }
+      setSuggestions(matches.slice(0, 15))
+    }, 150)
+    return () => clearTimeout(t)
+  }, [guess, showReveal, pool])
+
+  const submitGuess = useCallback(async (guessTitle?: string) => {
+    if (!duel || duel.winner_player_id || showReveal) return
+    const candidate = (guessTitle ?? guess).trim()
+    if (!candidate) return
     if (isSubmitting.current) return
     isSubmitting.current = true
 
-    const isCorrect = normalize(guess) === normalize(baseTitle(duel.track_title))
+    const isCorrect = normalize(candidate) === normalize(baseTitle(duel.track_title))
 
     if (!isCorrect) {
       setShowWrong(true)
       setGuess('')
+      setSuggestions([])
+      setShowSuggestions(false)
       isSubmitting.current = false
       return
     }
@@ -261,17 +296,34 @@ export default function DuelPhase({
 
       <div className="guess-panel">
         <p className="guess-header">Tu intento</p>
-        <div className="guess-input-wrap">
+        <div className="guess-input-wrap" style={{ position: 'relative' }}>
           <input
             className="guess-input"
             value={guess}
-            onChange={e => { setGuess(e.target.value); setShowWrong(false) }}
+            onChange={e => { setGuess(e.target.value); setShowWrong(false); setShowSuggestions(true) }}
+            onFocus={() => { if (guess.trim().length >= 2) setShowSuggestions(true) }}
             onKeyDown={e => e.key === 'Enter' && submitGuess()}
             placeholder="Nombre de la canción"
             autoFocus
+            autoComplete="off"
           />
-          <button onClick={submitGuess} className="btn-principal">Adivinar</button>
+          <button onClick={() => submitGuess()} className="btn-principal">Adivinar</button>
         </div>
+
+        {showSuggestions && suggestions.length > 0 && (
+          <ul className="track-results" style={{ marginTop: 8 }}>
+            {suggestions.map((s, i) => (
+              <li key={i} onClick={() => submitGuess(s.title)} className="track-result" style={{ cursor: 'pointer' }}>
+                <img src={s.cover} alt="" />
+                <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+                  <strong>{s.title}</strong>
+                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>{s.artist}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
         {showWrong && <p className="status-box is-wrong">No es esa canción, seguí intentando.</p>}
       </div>
     </div>
