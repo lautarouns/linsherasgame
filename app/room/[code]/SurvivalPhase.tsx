@@ -15,10 +15,8 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
 
   const [volume, setVolume] = useState(0.5)
 
-  // Duración total del modo (calculada una sola vez al montar, antes de que arranque la carga)
   const durationMsRef = useRef<number>(new Date(roundDeadline).getTime() - nowSynced())
 
-  // El cronómetro real no arranca hasta que las canciones terminan de cargar
   const [effectiveDeadline, setEffectiveDeadline] = useState<number | null>(null)
   const [remaining, setRemaining] = useState<number>(() => Math.ceil(durationMsRef.current / 1000))
   const [isFinished, setIsFinished] = useState(false)
@@ -28,7 +26,13 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // 1. Cargar temas (desde caché si existe, o armarlo una vez si no) y mezclarlos con la seed de esta partida
+  // 1. Resetear el estado al arrancar la ronda
+  useEffect(() => {
+    if (playerId) {
+      supabase.from('players').update({ is_finished: false, score: 0 }).eq('id', playerId).then()
+    }
+  }, [playerId, roundDeadline])
+
   useEffect(() => {
     let cancelled = false
     async function loadTop() {
@@ -39,7 +43,6 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
         const shuffled = seededShuffle(allTracks, roomCode + roundDeadline)
         if (!cancelled) {
           setTracks(shuffled)
-          // El cronómetro arranca recién ahora: te da la duración completa sin descontar la carga
           setEffectiveDeadline(nowSynced() + durationMsRef.current)
         }
       } catch (e) {
@@ -52,7 +55,6 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
     return () => { cancelled = true }
   }, [roomCode, roundDeadline])
 
-  // 2. Cronómetro basado en el deadline efectivo (recién definido tras cargar)
   useEffect(() => {
     if (effectiveDeadline === null) return
 
@@ -65,7 +67,6 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
     return () => clearInterval(interval)
   }, [effectiveDeadline])
 
-  // 3. Auto-reproducir en loop (Sin botón de play)
   useEffect(() => {
     if (tracks.length === 0 || isFinished || !audioRef.current) return
     const track = tracks[index]
@@ -78,21 +79,20 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
     audio.volume = volume
     audio.loop = true
     audio.currentTime = 0
-    audio.play().catch(e => console.log('Autoplay bloqueado por el navegador (hacé clic en la página):', e))
+    audio.play().catch(e => console.log('Autoplay bloqueado:', e))
 
     return () => {
       audio.pause()
     }
   }, [index, tracks, isFinished])
 
-  // 4. Actualizar volumen en tiempo real
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume
     }
   }, [volume])
 
-  // 5. Finalizar localmente
+  // Finalizar localmente
   useEffect(() => {
     if (effectiveDeadline !== null && remaining <= 0 && !isFinished) {
       setIsFinished(true)
@@ -102,24 +102,41 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
       }
       ;(async () => {
         if (playerId) {
-          await supabase.from('players').update({ score: guessed }).eq('id', playerId)
+          await supabase.from('players').update({ score: guessed, is_finished: true }).eq('id', playerId)
         }
       })()
     }
   }, [remaining, isFinished, guessed, playerId, effectiveDeadline])
 
-  // 6. El Host chequea el tiempo global (basado en el deadline original de la sala, para mantener sincronía entre jugadores)
+  // Host: chequear si todos terminaron basado en el tiempo global real
   useEffect(() => {
-    if (!isHost) return
-    const checkGlobal = setInterval(() => {
+    if (!isHost || !roomId) return
+
+    let interval: ReturnType<typeof setInterval> | null = null
+
+    const checkPlayersFinished = async () => {
+      const { data: players, error } = await supabase
+        .from('players')
+        .select('is_finished')
+        .eq('room_id', roomId)
+
+      if (error) return
+
+      const allFinished = Array.isArray(players) && players.length > 0 && players.every(p => p.is_finished === true)
       const globalTimeLeft = new Date(roundDeadline).getTime() - nowSynced()
-      if (globalTimeLeft <= 0 || (remaining <= 0 && totalPlayers === 1)) {
-        clearInterval(checkGlobal)
-        supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId).then()
+
+      if (globalTimeLeft <= 0 || allFinished) {
+        await supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
+        if (interval) clearInterval(interval)
       }
-    }, 1000)
-    return () => clearInterval(checkGlobal)
-  }, [isHost, roundDeadline, roomId, remaining, totalPlayers])
+    }
+
+    interval = setInterval(checkPlayersFinished, 1500)
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [isHost, roomId, roundDeadline])
 
   const submitGuess = (guessTitle?: string) => {
     if (isFinished || tracks.length === 0) return
@@ -149,7 +166,6 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
     setSuggestions([])
   }
 
-  // Buscador en vivo: filtra el pool ya cargado en memoria, sin pegarle a la red
   useEffect(() => {
     const t = setTimeout(() => {
       const q = guess.trim().toLowerCase()
@@ -161,9 +177,6 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
         track.title.toLowerCase().includes(q) || track.artist.toLowerCase().includes(q)
       )
 
-      // Mezclamos el orden: si no, el tema que está sonando queda siempre
-      // primero (por cómo recorremos el pool en orden a medida que avanza
-      // la partida), y eso delata cuál es sin que el jugador acierte nada.
       for (let i = matches.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1))
         ;[matches[i], matches[j]] = [matches[j], matches[i]]

@@ -5,10 +5,16 @@ import { supabase } from '@/lib/supabase'
 import { nowSynced } from '@/lib/serverTime'
 import { seededShuffle, normalize } from '@/lib/tracks'
 
+type PlayerPoolRow = {
+  name?: string
+  clubs?: string[] | string | null
+  teams?: string[] | string | null
+}
+
 export default function DueloPhase({ roomId, playerId, roomCode, roundDeadline, isHost, totalPlayers }:
   { roomId: string, playerId: string | null, roomCode: string, roundDeadline: string, isHost?: boolean, totalPlayers: number }) {
 
-  const [playersPool, setPlayersPool] = useState<any[]>([])
+  const [playersPool, setPlayersPool] = useState<PlayerPoolRow[]>([])
   const [index, setIndex] = useState(0)
   const [guessed, setGuessed] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -20,7 +26,14 @@ export default function DueloPhase({ roomId, playerId, roomCode, roundDeadline, 
 
   const [guess, setGuess] = useState('')
 
-  // Load football players and shuffle deterministically
+  // 1. Resetear el estado al arrancar la ronda
+  useEffect(() => {
+    if (playerId) {
+      supabase.from('players').update({ is_finished: false, score: 0 }).eq('id', playerId).then()
+    }
+  }, [playerId, roundDeadline])
+
+  // 2. Cargar jugadores
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -43,7 +56,7 @@ export default function DueloPhase({ roomId, playerId, roomCode, roundDeadline, 
     return () => { cancelled = true }
   }, [roomCode, roundDeadline])
 
-  // Cronómetro
+  // 3. Cronómetro exacto
   useEffect(() => {
     if (effectiveDeadline === null) return
     const tick = () => {
@@ -55,30 +68,49 @@ export default function DueloPhase({ roomId, playerId, roomCode, roundDeadline, 
     return () => clearInterval(interval)
   }, [effectiveDeadline])
 
-  // Finalizar localmente
+  // 4. Finalizar localmente al agotarse el tiempo
   useEffect(() => {
     if (effectiveDeadline !== null && remaining <= 0 && !isFinished) {
       setIsFinished(true)
       ;(async () => {
         if (playerId) {
-          await supabase.from('players').update({ score: guessed }).eq('id', playerId)
+          await supabase.from('players').update({ score: guessed, is_finished: true }).eq('id', playerId)
         }
       })()
     }
   }, [remaining, isFinished, guessed, playerId, effectiveDeadline])
 
-  // Host: chequear global y cerrar la sala
+  // 5. Host: chequear tiempo global y si todos terminaron
   useEffect(() => {
-    if (!isHost) return
-    const checkGlobal = setInterval(() => {
+    if (!isHost || !roomId) return
+
+    let interval: ReturnType<typeof setInterval> | null = null
+
+    const checkPlayersFinished = async () => {
+      const { data: players, error } = await supabase
+        .from('players')
+        .select('is_finished')
+        .eq('room_id', roomId)
+
+      if (error) return
+
+      const allFinished = Array.isArray(players) && players.length > 0 && players.every(p => p.is_finished === true)
+      
+      // Chequeamos el tiempo global real (no afectado por "Saltar")
       const globalTimeLeft = new Date(roundDeadline).getTime() - nowSynced()
-      if (globalTimeLeft <= 0 || (remaining <= 0 && totalPlayers === 1)) {
-        clearInterval(checkGlobal)
-        supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId).then()
+
+      if (globalTimeLeft <= 0 || allFinished) {
+        await supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
+        if (interval) clearInterval(interval)
       }
-    }, 1000)
-    return () => clearInterval(checkGlobal)
-  }, [isHost, roundDeadline, roomId, remaining, totalPlayers])
+    }
+
+    interval = setInterval(checkPlayersFinished, 1500)
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [isHost, roomId, roundDeadline])
 
   const submitGuess = (guessTitle?: string) => {
     if (isFinished || playersPool.length === 0) return
@@ -86,16 +118,11 @@ export default function DueloPhase({ roomId, playerId, roomCode, roundDeadline, 
     const candidate = (guessTitle ?? guess).trim()
     if (!candidate) return
 
-    // Normalizamos lo que escribió el usuario
+    const safeName = track.name || ''
     const normalizedCandidate = normalize(candidate)
-    
-    // Normalizamos el nombre completo de la BD
-    const fullNormalizedTarget = normalize(track.name)
-    
-    // Dividimos el nombre de la BD en palabras (ej: ["lionel", "messi"])
-    const targetParts = track.name.split(' ').map((part: string) => normalize(part))
+    const fullNormalizedTarget = normalize(safeName)
+    const targetParts = safeName.split(' ').map((part: string) => normalize(part))
 
-    // Es correcto si escribe el nombre completo, o si pega una de las palabras exactas (el apellido o primer nombre)
     const isCorrect = fullNormalizedTarget === normalizedCandidate || targetParts.includes(normalizedCandidate)
 
     if (isCorrect) {
@@ -103,7 +130,6 @@ export default function DueloPhase({ roomId, playerId, roomCode, roundDeadline, 
       setIndex(i => Math.min(playersPool.length - 1, i + 1))
       setGuess('')
     } else {
-      // Restamos 3 segundos al reloj de forma correcta
       setEffectiveDeadline(d => (d !== null ? d - 3000 : d))
       setGuess('')
     }
@@ -116,8 +142,7 @@ export default function DueloPhase({ roomId, playerId, roomCode, roundDeadline, 
     setGuess('')
   }
 
-  // Render clubs for current player
-  const renderClubs = (item: any) => {
+  const renderClubs = (item?: PlayerPoolRow | null) => {
     const clubs = item?.clubs ?? item?.teams ?? ''
     let list: string[] = []
     if (Array.isArray(clubs)) list = clubs
@@ -144,7 +169,6 @@ export default function DueloPhase({ roomId, playerId, roomCode, roundDeadline, 
 
       {!isFinished ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Cards grid showing all clubs of current player */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
             {playersPool[index] ? renderClubs(playersPool[index]) : <div className="status-box">No hay jugadores</div>}
           </div>
