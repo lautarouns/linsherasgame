@@ -42,6 +42,7 @@ export default function FutbolRoomPage() {
   const [onlinePlayerIds, setOnlinePlayerIds] = useState<Set<string>>(new Set())
   const [roundSeconds, setRoundSeconds] = useState(60)
   const [selectedMode, setSelectedMode] = useState<'duelo' | 'higher'>('duelo')
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (!code) return
@@ -106,6 +107,15 @@ export default function FutbolRoomPage() {
     return () => { supabase.removeChannel(presenceChannel) }
   }, [room?.id, playerId])
 
+  const copyCode = async () => {
+    if (!room) return
+    try {
+      await navigator.clipboard.writeText(room.code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } catch {}
+  }
+
   if (!room || !playerId) return <p style={{ padding: 40 }}>Cargando sala...</p>
 
   const onlinePlayers = players.filter(p => onlinePlayerIds.has(p.id))
@@ -123,7 +133,14 @@ export default function FutbolRoomPage() {
               <div className="room-label">Sala</div>
               <div className="code-wrap">
                 <h1 className="room-title">{room.code}</h1>
-                <button type="button" className="btn-copy" title="Copiar código">COPIAR</button>
+                <button
+                  type="button"
+                  onClick={copyCode}
+                  className={copied ? 'btn-copy is-copied' : 'btn-copy'}
+                  title="Copiar código"
+                >
+                  {copied ? 'COPIADO' : 'COPIAR'}
+                </button>
               </div>
             </div>
             <span className="room-badge">{room.status}</span>
