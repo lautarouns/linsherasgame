@@ -35,7 +35,7 @@ export default function DuelPhase({
   const [showReveal, setShowReveal] = useState(false)
   const [volume, setVolume] = useState(0.7)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const advanceScheduled = useRef(false)
+  const advanceScheduledRound = useRef<number | null>(null)
   const isSubmitting = useRef(false)
 
   // Pool compartido de canciones (el mismo que usan Supervivencia y Diario),
@@ -65,7 +65,6 @@ export default function DuelPhase({
       setSecondsLeft(roundDuration)
       setSuggestions([])
       setShowSuggestions(false)
-      advanceScheduled.current = false
       isSubmitting.current = false
 
       const { data } = await supabase
@@ -116,8 +115,13 @@ export default function DuelPhase({
     }
   }, [volume, duel])
 
-  // 4. Cronómetro: solo cuenta el tiempo y detecta cuándo se cumplió (por reloj o porque alguien ganó)
+  // 4. Cronómetro: solo cuenta el tiempo y detecta cuándo se cumplió (por reloj o porque alguien ganó).
+  // Deja de tickear apenas arranca la revelación, para que secondsLeft no siga
+  // cambiando de ahí en más (eso reiniciaba el efecto de avance en cada segundo
+  // y terminaba cancelando su propio setTimeout ya programado).
   useEffect(() => {
+    if (showReveal) return
+
     const tick = () => {
       const diff = Math.max(0, Math.ceil((new Date(roundDeadline).getTime() - nowSynced()) / 1000))
       setSecondsLeft(diff)
@@ -138,26 +142,39 @@ export default function DuelPhase({
   // de la siguiente ronda una única vez, en el momento en que efectivamente
   // arranca — así nunca puede quedar más corta por una doble programación.
   useEffect(() => {
-    if (!isHost || advanceScheduled.current) return
-    const roundEnded = !!duel?.winner_player_id || secondsLeft === 0
+    console.log('[duelo] check avance', { isHost, advanceScheduledRound: advanceScheduledRound.current, currentRound, duelRound: duel?.round_number, winner: duel?.winner_player_id, secondsLeft })
+    if (!isHost || advanceScheduledRound.current === currentRound) return
+
+    // No evaluamos nada hasta que el `duel` cargado sea el de ESTA ronda —
+    // si no, todavía tenemos los datos viejos de la ronda anterior (con su
+    // propio ganador ya marcado), y eso hacía creer que la ronda actual ya
+    // había terminado antes de arrancar.
+    if (!duel || duel.round_number !== currentRound) return
+
+    const roundEnded = !!duel.winner_player_id || secondsLeft === 0
     if (!roundEnded) return
 
-    advanceScheduled.current = true
+    console.log('[duelo] programando avance, ronda terminó', { currentRound, totalRounds })
+    advanceScheduledRound.current = currentRound
     const timer = setTimeout(() => {
+      console.log('[duelo] ejecutando avance ahora')
       if (currentRound >= totalRounds) {
         supabase.from('rooms').update({ status: 'finished' }).eq('id', roomId)
-          .then(({ error }) => { if (error) console.error(error) })
+          .then(({ error }) => { if (error) console.error('[duelo] error al finalizar', error) })
       } else {
         supabase.from('rooms').update({
           current_round: currentRound + 1,
           round_deadline: new Date(nowSynced() + roundDuration * 1000).toISOString()
         }).eq('id', roomId)
-          .then(({ error }) => { if (error) console.error(error) })
+          .then(({ error }) => {
+            if (error) console.error('[duelo] error al avanzar ronda', error)
+            else console.log('[duelo] avance escrito OK')
+          })
       }
     }, REVEAL_SECONDS * 1000)
 
     return () => clearTimeout(timer)
-  }, [isHost, duel?.winner_player_id, secondsLeft, currentRound, totalRounds, roomId, roundDuration])
+  }, [isHost, duel?.round_number, duel?.winner_player_id, secondsLeft, currentRound, totalRounds, roomId, roundDuration])
 
   // 6. Buscador en vivo: filtra el pool ya cargado en memoria, sin pegarle a la red.
   // Se mezcla el orden para no delatar el tema actual por su posición en la lista.
