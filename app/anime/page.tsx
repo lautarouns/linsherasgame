@@ -1,6 +1,11 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+
+function randomCode() {
+  return Math.random().toString(36).substring(2, 6).toUpperCase()
+}
 
 /** Fondo animado rojo/rosado con glows y partículas */
 function AnimatedBackground({ count = 13 }: { count?: number }) {
@@ -74,6 +79,51 @@ function useCurtainNav() {
 export default function AnimeHome() {
   const router = useRouter()
   const { curtain, run, busy } = useCurtainNav()
+  const [joinCode, setJoinCode] = useState('')
+  const [nickname, setNickname] = useState('')
+
+  const createRoom = async () => {
+    if (!nickname) return alert('Poné un nombre')
+    const code = randomCode()
+
+    const { data: room, error } = await supabase
+      .from('rooms')
+      .insert({ code })
+      .select()
+      .single()
+    if (error) return alert(error.message)
+
+    const { data: player, error: playerError } = await supabase
+      .from('players')
+      .insert({ room_id: room.id, nickname })
+      .select()
+      .single()
+    if (playerError) return alert(playerError.message)
+
+    localStorage.setItem('playerId', player.id)
+    router.push(`/anime/room/${code}`)
+  }
+
+  const joinRoom = async () => {
+    if (!nickname || !joinCode) return alert('Faltan datos')
+
+    const { data: room, error } = await supabase
+      .from('rooms')
+      .select()
+      .eq('code', joinCode.toUpperCase())
+      .single()
+    if (error || !room) return alert('Sala no encontrada')
+
+    const { data: player, error: playerError } = await supabase
+      .from('players')
+      .insert({ room_id: room.id, nickname })
+      .select()
+      .single()
+    if (playerError) return alert(playerError.message)
+
+    localStorage.setItem('playerId', player.id)
+    router.push(`/anime/room/${room.code}`)
+  }
 
   return (
     <div className="theme-anime">
@@ -101,28 +151,74 @@ export default function AnimeHome() {
         </div>
 
         <h2 className="page-title sg-rise sg-d3">Anime</h2>
-        <p className="page-subtitle sg-rise sg-d4">Adiviná el anime del día con la menor cantidad de pistas posible.</p>
+        <p className="page-subtitle sg-rise sg-d4">Adiviná el anime del día, o entrá con amigos a jugar en sala.</p>
 
-        <button
-          type="button"
-          onClick={() => run('Desafío Diario', () => router.push('/anime/daily'))}
-          className="btn-principal sg-sheen sg-rise sg-d5"
-          style={{ width: 'min(100%, 320px)', marginBottom: 18 }}
-        >
-          Desafío Diario
-        </button>
+        <div style={{ display: 'flex', gap: 12, width: 'min(100%, 480px)', marginBottom: 18 }}>
+          <button
+            type="button"
+            onClick={() => run('Desafío Diario', () => router.push('/anime/daily'))}
+            className="btn-principal sg-sheen sg-rise sg-d5"
+            style={{ flex: 1 }}
+          >
+            Desafío Diario
+          </button>
+          <button
+            type="button"
+            onClick={() => run('Adiviná el Personaje', () => router.push('/anime/characterdle'))}
+            className="btn-principal sg-sheen sg-rise sg-d5"
+            style={{ flex: 1 }}
+          >
+            Adiviná el Personaje
+          </button>
+        </div>
 
-        <main className="page-card sg-breathe" style={{ textAlign: 'center' }}>
-          <p style={{ color: 'var(--muted)', margin: 0 }}>
-            Cada día un anime nuevo. Tenés 12 intentos: empezás con un personaje secundario muy poco conocido, seguido del género, la sinopsis, el año y el estudio de animación, y después vas destapando características cada vez más obvias.
-          </p>
+        <main className="page-card sg-breathe">
+          <label className="field-label" htmlFor="nickname">Tu nombre</label>
+          <input
+            id="nickname"
+            className="form-field"
+            placeholder="Tu nombre"
+            value={nickname}
+            onChange={e => setNickname(e.target.value)}
+          />
+
+          <button
+            type="button"
+            onClick={() => run('Creando sala', createRoom)}
+            className="btn-principal sg-sheen sg-sheen-slow"
+            style={{ width: '100%', marginTop: 14 }}
+          >
+            Crear sala de Duelo
+          </button>
+
+          <div className="divider"><span>O unite</span></div>
+
+          <div className="form-row">
+            <input
+              className="form-field"
+              placeholder="Código"
+              maxLength={4}
+              value={joinCode}
+              onChange={e => setJoinCode(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => run('Entrando a la sala', joinRoom)}
+              className="btn-principal"
+            >
+              Unirse
+            </button>
+          </div>
+
+          <div className="divider"><span>o</span></div>
+
           <button
             type="button"
             onClick={() => run('Archivo', () => router.push('/anime/archive'))}
             className="btn-secondary"
-            style={{ width: '100%', marginTop: 20 }}
+            style={{ width: '100%' }}
           >
-            Ver archivo de días anteriores
+            Ver archivo del Desafío Diario
           </button>
         </main>
       </div>

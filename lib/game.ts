@@ -112,6 +112,44 @@ export async function startDuelPhase(roomId: string, totalRounds = 10, roundSeco
   }).eq('id', roomId)
 }
 
+// Arranca el modo Duelo de Anime: arma `totalRounds` rondas a partir del
+// pool de personajes en `anime_characters`, mismo patrón que startDuelPhase.
+export async function startAnimeDuelPhase(roomId: string, totalRounds = 10, roundSeconds = 20) {
+  const { data: existingDuels } = await supabase
+    .from('anime_duels')
+    .select('id')
+    .eq('room_id', roomId)
+
+  if (existingDuels && existingDuels.length > 0) {
+    await supabase.from('anime_duels').delete().eq('room_id', roomId)
+  }
+
+  const { data } = await supabase.from('anime_characters').select('*')
+  const pool = data ?? []
+  if (pool.length === 0) return
+
+  const shuffled = seededShuffle(pool, roomId + Date.now())
+  const picked = shuffled.slice(0, Math.min(totalRounds, shuffled.length))
+
+  const rows = picked.map((c: any, i: number) => ({
+    room_id: roomId,
+    round_number: i + 1,
+    character_name: c.character_name,
+    anime_title: c.anime_title,
+    cover_url: c.cover_url
+  }))
+
+  await supabase.from('anime_duels').insert(rows)
+
+  await supabase.from('rooms').update({
+    status: 'playing',
+    game_mode: 'anime_duel',
+    current_round: 1,
+    total_rounds: rows.length,
+    round_deadline: new Date(nowSynced() + roundSeconds * 1000).toISOString()
+  }).eq('id', roomId)
+}
+
 export async function resetGame(roomId: string) {
   const { data: rounds } = await supabase
     .from('rounds')
@@ -126,6 +164,7 @@ export async function resetGame(roomId: string) {
   await supabase.from('rounds').delete().eq('room_id', roomId)
   await supabase.from('picks').delete().eq('room_id', roomId)
   await supabase.from('duels').delete().eq('room_id', roomId)
+  await supabase.from('anime_duels').delete().eq('room_id', roomId)
   
   // ACÁ ESTÁ EL ARREGLO DE AYER: Mantenemos el current_streak intacto
   await supabase.from('players').update({ score: 0, current_streak: 0 }).eq('room_id', roomId)
