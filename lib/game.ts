@@ -73,6 +73,18 @@ export async function startDueloPhase(roomId: string, seconds = 60) {
   }).eq('id', roomId)
 }
 
+export async function startFutbolDueloSincronoPhase(roomId: string, totalRounds = 7, roundSeconds = 15) {
+  const { error } = await supabase.from('rooms').update({
+    status: 'playing',
+    game_mode: 'duelo_sincrono',
+    current_round: 1,
+    total_rounds: totalRounds,
+    round_deadline: new Date(nowSynced() + roundSeconds * 1000).toISOString()
+  }).eq('id', roomId)
+
+  if (error) throw error
+}
+
 // Arranca el modo Duelo: arma `totalRounds` rondas a partir del mismo pool de
 // canciones que usa Supervivencia (cacheado en Supabase), idempotente igual que
 // startPlayingPhase — si ya hay duelos armados para esta sala, no los reharagas.

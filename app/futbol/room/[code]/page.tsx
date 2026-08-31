@@ -2,8 +2,9 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { startDueloPhase } from '@/lib/game'
+import { startDueloPhase, startFutbolDueloSincronoPhase } from '@/lib/game'
 import DueloPhase from './DueloPhase'
+import DueloSincronoPhase from './DueloSincronoPhase'
 
 import ChatIsland from '@/app/room/[code]/ChatIsland'
 import Leaderboard from '@/app/room/[code]/leaderboard'
@@ -41,7 +42,8 @@ export default function FutbolRoomPage() {
   })
   const [onlinePlayerIds, setOnlinePlayerIds] = useState<Set<string>>(new Set())
   const [roundSeconds, setRoundSeconds] = useState(60)
-  const [selectedMode, setSelectedMode] = useState<'duelo' | 'higher'>('duelo')
+  const [dueloRounds, setDueloRounds] = useState(7)
+  const [selectedMode, setSelectedMode] = useState<'duelo' | 'duelo_sincrono'>('duelo')
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -171,14 +173,14 @@ export default function FutbolRoomPage() {
                       className={selectedMode === 'duelo' ? 'segment-button is-selected' : 'segment-button'}
                       onClick={() => setSelectedMode('duelo')}
                     >
-                      Duelo de Carreras
+                      Clasico
                     </button>
                     <button
                       type="button"
-                      className={selectedMode === 'higher' ? 'segment-button is-selected' : 'segment-button'}
-                      onClick={() => setSelectedMode('higher')}
+                      className={selectedMode === 'duelo_sincrono' ? 'segment-button is-selected' : 'segment-button'}
+                      onClick={() => setSelectedMode('duelo_sincrono')}
                     >
-                      Higher or Lower
+                      Duelo
                     </button>
                   </div>
 
@@ -206,13 +208,29 @@ export default function FutbolRoomPage() {
                     </>
                   )}
 
-                  {selectedMode === 'higher' && (
+                  {selectedMode === 'duelo_sincrono' && (
                     <>
-                      <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.02)', marginBottom: 12 }}>
-                        <p style={{ margin: 0, color: 'var(--muted-strong)' }}>Higher or Lower - configuración pendiente. Aún no implementado.</p>
+                      <div className="select-wrap is-stack">
+                        <label>Rondas</label>
+                        <div className="segment-group">
+                          {[7, 11, 15].map(rounds => (
+                            <button
+                              key={rounds}
+                              type="button"
+                              onClick={() => setDueloRounds(rounds)}
+                              className={dueloRounds === rounds ? 'segment-button is-selected' : 'segment-button'}
+                            >
+                              {rounds}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <button className="btn-principal" style={{ width: '100%' }}>
-                        Preparar Higher or Lower
+                      <button
+                        className="btn-principal"
+                        style={{ width: '100%' }}
+                        onClick={() => startFutbolDueloSincronoPhase(room.id, dueloRounds)}
+                      >
+                        Preparar Duelo
                       </button>
                     </>
                   )}
@@ -234,13 +252,26 @@ export default function FutbolRoomPage() {
             />
           )}
 
+          {room.status === 'playing' && room.game_mode === 'duelo_sincrono' && room.round_deadline && (
+            <DueloSincronoPhase
+              roomId={room.id}
+              playerId={playerId}
+              nickname={currentPlayer?.nickname}
+              roomCode={room.code}
+              currentRound={room.current_round}
+              roundDeadline={room.round_deadline}
+              isHost={isHost}
+              totalRounds={room.total_rounds}
+            />
+          )}
+
           {room.status === 'finished' && (
             <Scoreboard players={players} playerId={playerId} roomId={room.id} isHost={isHost} />
           )}
 
         </div>
 
-        {room.game_mode !== 'duelo' && (
+        {room.game_mode !== 'duelo' && room.game_mode !== 'duelo_sincrono' && (
           <Leaderboard players={players} playerId={playerId} />
         )}
       </div>
