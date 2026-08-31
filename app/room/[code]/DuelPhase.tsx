@@ -204,7 +204,7 @@ export default function DuelPhase({
     if (isSubmitting.current) return
     isSubmitting.current = true
 
-    const isCorrect = normalize(candidate) === normalize(baseTitle(duel.track_title))
+    const isCorrect = normalize(baseTitle(candidate)) === normalize(baseTitle(duel.track_title))
 
     if (!isCorrect) {
       setShowWrong(true)

@@ -29,7 +29,8 @@ export const POPULAR_ARTISTS = [
   'Don omar', 'Daddy Yankee', 'Wisin y Yandel', 'Justin Quiles', 'Radiohead', 'Zion & Lennox',
   'Arcangel', 'Nicky Jam', 'Sech', 'Myke Towers', 'XXXTENTACION', 'Juice WRLD',
   'Lil Peep', 'Pop Smoke', 'Lil Baby', 'Danny Ocean', 'Jhay Cortez', 'J Alvarez',
-  'Prince Royce', 'Romeo Santos', 'Tego Calderon', 'Cosculluela'
+  'Prince Royce', 'Romeo Santos', 'Tego Calderon', 'Cosculluela', 'Zell', 'Little boogie',
+  '21 Savage', 'Farruko' 
 ]
 
 const POOL_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7 // 7 días: refresco completo del catálogo

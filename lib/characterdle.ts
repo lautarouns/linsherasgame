@@ -2,18 +2,17 @@ export type Character = {
   id: string
   character_name: string
   cover_url: string | null
-  gender: string
-  arc: string
-  regiment: string
-  species: string
-  height_category: string
-  status: string
+  attributes: Record<string, string>
 }
 
-// Orden narrativo aproximado de los arcos, usado para dar la pista de
-// dirección (▲/▼) cuando el arco no coincide exacto.
-export const ARC_ORDER = ['Entrenamiento', 'Trost', 'Titán Hembra', 'Regreso a Shiganshina', 'Choque de Titanes', 'Marley']
-export const HEIGHT_ORDER = ['Bajo', 'Promedio', 'Alto']
+export type CategoryConfig = {
+  category_key: string
+  label: string
+  display_order: number
+  comparison_type: 'categorical' | 'ordinal' | 'numeric'
+  ordinal_order: string[] | null
+  hint_order: number | null
+}
 
 export type CellState = 'correct' | 'partial' | 'wrong'
 export type Cell = { value: string; state: CellState; arrow?: 'up' | 'down' }
@@ -22,8 +21,8 @@ function compareExact(guessVal: string, targetVal: string): Cell {
   return { value: guessVal, state: guessVal === targetVal ? 'correct' : 'wrong' }
 }
 
-// Para atributos con un orden lógico (altura, arco): si no coincide exacto,
-// se muestra en amarillo con una flecha indicando si el personaje objetivo
+// Para categorías con un orden lógico (arco, altura, grado): si no coincide
+// exacto, se muestra en amarillo con una flecha indicando si el objetivo
 // está "más arriba" o "más abajo" en ese orden.
 function compareOrdinal(guessVal: string, targetVal: string, order: string[]): Cell {
   const gi = order.indexOf(guessVal)
@@ -34,26 +33,37 @@ function compareOrdinal(guessVal: string, targetVal: string, order: string[]): C
   return { value: guessVal, state: 'partial', arrow: gi < ti ? 'up' : 'down' }
 }
 
-export type ComparisonRow = {
-  gender: Cell
-  arc: Cell
-  regiment: Cell
-  species: Cell
-  height: Cell
-  status: Cell
+// Para categorías numéricas (como la edad): compara los números directamente,
+// sin necesitar una lista de orden predefinida.
+function compareNumeric(guessVal: string, targetVal: string): Cell {
+  const g = parseFloat(guessVal)
+  const t = parseFloat(targetVal)
+  if (isNaN(g) || isNaN(t)) return compareExact(guessVal, targetVal)
+  if (g === t) return { value: guessVal, state: 'correct' }
+  return { value: guessVal, state: 'partial', arrow: g < t ? 'up' : 'down' }
 }
 
-export function compareCharacters(guess: Character, target: Character): ComparisonRow {
-  return {
-    gender: compareExact(guess.gender, target.gender),
-    arc: compareOrdinal(guess.arc, target.arc, ARC_ORDER),
-    regiment: compareExact(guess.regiment, target.regiment),
-    species: compareExact(guess.species, target.species),
-    height: compareOrdinal(guess.height_category, target.height_category, HEIGHT_ORDER),
-    status: compareExact(guess.status, target.status),
+export function compareCharacters(
+  guess: Character,
+  target: Character,
+  categories: CategoryConfig[]
+): Record<string, Cell> {
+  const result: Record<string, Cell> = {}
+  for (const cat of categories) {
+    const guessVal = guess.attributes[cat.category_key] ?? ''
+    const targetVal = target.attributes[cat.category_key] ?? ''
+
+    if (cat.comparison_type === 'ordinal' && cat.ordinal_order) {
+      result[cat.category_key] = compareOrdinal(guessVal, targetVal, cat.ordinal_order)
+    } else if (cat.comparison_type === 'numeric') {
+      result[cat.category_key] = compareNumeric(guessVal, targetVal)
+    } else {
+      result[cat.category_key] = compareExact(guessVal, targetVal)
+    }
   }
+  return result
 }
 
-export function isWinningGuess(row: ComparisonRow): boolean {
+export function isWinningGuess(row: Record<string, Cell>): boolean {
   return Object.values(row).every(cell => cell.state === 'correct')
 }

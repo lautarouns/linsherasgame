@@ -87,7 +87,7 @@ export default function DailyAnimeGame({ dateStr }: { dateStr: string }) {
   useEffect(() => {
     const t = setTimeout(() => {
       const q = guess.trim().toLowerCase()
-      if (q.length < 2 || status !== 'playing') {
+      if (q.length < 1 || status !== 'playing') {
         setSuggestions([])
         return
       }

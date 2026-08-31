@@ -98,15 +98,25 @@ export default function PickingPhase({
     }
   }, [picksCount, totalExpectedPicks, isHost, secondsLeft, roomId])
 
+  // Buscador en vivo: pasa por nuestro propio endpoint (app/api/search-songs),
+  // que consulta iTunes desde el servidor con un cachecito corto. Así el
+  // límite de pedidos ya no depende de la IP de cada jugador (antes, si el
+  // host y el invitado estaban en la misma red, se peleaban por el mismo
+  // cupo), y seguís pudiendo buscar cualquier canción, no solo las del pool.
   useEffect(() => {
-    if (query.length < 2) return
+    if (query.trim().length < 2) {
+      setResults([])
+      return
+    }
 
     const timeout = setTimeout(async () => {
-      const res = await fetch(
-        `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=8`
-      )
-      const data = await res.json()
-      setResults(data.results.filter((t: Track) => t.previewUrl))
+      try {
+        const res = await fetch(`/api/search-songs?q=${encodeURIComponent(query)}`)
+        const data = await res.json()
+        setResults(data.results ?? [])
+      } catch (e) {
+        console.error('Error buscando canciones', e)
+      }
     }, 350)
     return () => clearTimeout(timeout)
   }, [query])

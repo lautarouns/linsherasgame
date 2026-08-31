@@ -19,6 +19,14 @@ type Pick = {
 
 type RoundRow = { id: string; round_number: number; picks: Pick }
 
+type SearchResult = {
+  trackId: number
+  trackName: string
+  artistName: string
+  previewUrl: string
+  artworkUrl100: string
+}
+
 function normalize(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
 }
@@ -93,6 +101,13 @@ export default function RoundPhase({
   const streakBroken = useRef(false) 
   const isSubmitting = useRef(false) // NUEVO: Candado para evitar el doble puntaje
 
+  // Sugerencias de la fase de adivinar: pasan por nuestro propio endpoint
+  // (app/api/search-songs), igual que en la elección de canciones — así
+  // aparece cualquier tema que se haya podido elegir (no solo los del pool
+  // curado), y sin depender de la IP de cada jugador.
+  const [suggestions, setSuggestions] = useState<SearchResult[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+
   useEffect(() => {
     const load = async () => {
       setCorrect(false)
@@ -106,6 +121,8 @@ export default function RoundPhase({
       advanceScheduled.current = false
       streakBroken.current = false 
       isSubmitting.current = false // Liberamos el candado al inicio de cada ronda
+      setSuggestions([])
+      setShowSuggestions(false)
 
       const { data } = await supabase
         .from('rounds')
@@ -197,19 +214,45 @@ export default function RoundPhase({
     return () => clearInterval(interval)
   }, [roundDeadline, round, isHost, currentRound, totalRounds, roomId, showReveal, correct, playerId, handleBreakStreak, roundDuration])
 
-  const submitGuess = useCallback(async () => {
-    if (!round || correct || !guess.trim() || showReveal) return
+  // Buscador en vivo: pasa por nuestro propio endpoint (app/api/search-songs),
+  // que consulta iTunes desde el servidor con un cachecito corto — mismo
+  // patrón que la fase de elección, así aparece cualquier tema válido.
+  useEffect(() => {
+    const q = guess.trim()
+    if (q.length < 2 || correct || showReveal) {
+      setSuggestions([])
+      return
+    }
+
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search-songs?q=${encodeURIComponent(q)}`)
+        const data = await res.json()
+        setSuggestions(data.results ?? [])
+      } catch (e) {
+        console.error('Error buscando canciones', e)
+      }
+    }, 300)
+    return () => clearTimeout(timeout)
+  }, [guess, correct, showReveal])
+
+  const submitGuess = useCallback(async (guessTitle?: string) => {
+    if (!round || correct || showReveal) return
     if (round.picks.player_id === playerId) return
-    
+    const candidate = (guessTitle ?? guess).trim()
+    if (!candidate) return
+
     // NUEVO: Bloqueamos si ya está procesando una respuesta
     if (isSubmitting.current) return
     isSubmitting.current = true
 
-    const isCorrect = normalize(guess) === normalize(baseTitle(round.picks.track_name))
+    const isCorrect = normalize(baseTitle(candidate)) === normalize(baseTitle(round.picks.track_name))
 
     if (!isCorrect) {
       setShowWrong(true)
       setGuess('')
+      setSuggestions([])
+      setShowSuggestions(false)
       
       // Liberamos el candado para que pueda intentar de nuevo
       isSubmitting.current = false 
@@ -346,12 +389,29 @@ export default function RoundPhase({
             <input
               className="guess-input"
               value={guess}
-              onChange={e => { setGuess(e.target.value); setShowWrong(false) }}
+              onChange={e => { setGuess(e.target.value); setShowWrong(false); setShowSuggestions(true) }}
+              onFocus={() => { if (guess.trim().length >= 2) setShowSuggestions(true) }}
               onKeyDown={e => e.key === 'Enter' && submitGuess()}
               placeholder="Nombre de la canción"
+              autoComplete="off"
             />
-            <button onClick={submitGuess} className="btn-principal">Adivinar</button>
+            <button onClick={() => submitGuess()} className="btn-principal">Adivinar</button>
           </div>
+
+          {showSuggestions && suggestions.length > 0 && (
+            <ul className="track-results" style={{ marginTop: 8 }}>
+              {suggestions.map((s, i) => (
+                <li key={s.trackId ?? i} onClick={() => submitGuess(s.trackName)} className="track-result" style={{ cursor: 'pointer' }}>
+                  <img src={s.artworkUrl100} alt="" />
+                  <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+                    <strong>{s.trackName}</strong>
+                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>{s.artistName}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
           {showWrong && <p className="status-box is-wrong">No es esa canción, seguí intentando.</p>}
         </div>
       )}

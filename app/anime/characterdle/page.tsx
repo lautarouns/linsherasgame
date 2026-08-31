@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 
 const ANIMES = [
   { slug: 'attack-on-titan', name: 'Attack on Titan', icon: '⚔️' },
+  { slug: 'jujutsu-kaisen', name: 'Jujutsu Kaisen(WIP)', icon: '🌀' },
 ]
 
 export default function CharacterdlePicker() {

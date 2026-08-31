@@ -2,31 +2,19 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { seededShuffle } from '@/lib/tracks'
-import { Character, ComparisonRow, compareCharacters, isWinningGuess } from '@/lib/characterdle'
-import Link from 'next/link'
+import { Character, CategoryConfig, Cell, compareCharacters, isWinningGuess } from '@/lib/characterdle'
 import { useRouter } from 'next/navigation'
 
 type GuessRow = {
   character: Character
-  comparison: ComparisonRow
+  comparison: Record<string, Cell>
 }
 
-const COLUMNS: { key: keyof ComparisonRow; label: string; field: keyof Character }[] = [
-  { key: 'gender', label: 'Género', field: 'gender' },
-  { key: 'arc', label: 'Arco', field: 'arc' },
-  { key: 'regiment', label: 'Regimiento', field: 'regiment' },
-  { key: 'species', label: 'Especie', field: 'species' },
-  { key: 'height', label: 'Altura', field: 'height_category' },
-  { key: 'status', label: 'Estado', field: 'status' },
-]
+const ANIME_NAMES: Record<string, string> = {
+  'attack-on-titan': 'Attack on Titan',
+  'jujutsu-kaisen': 'Jujutsu Kaisen',
+}
 
-// Cada 5 intentos se destapa una pista más, en este orden.
-const HINTS_ORDER: { field: keyof Character; label: string }[] = [
-  { field: 'arc', label: 'Arco' },
-  { field: 'status', label: 'Estado' },
-  { field: 'height_category', label: 'Altura' },
-  { field: 'regiment', label: 'Regimiento' },
-]
 const HINT_EVERY = 5
 
 function cellStyle(state: 'correct' | 'partial' | 'wrong') {
@@ -35,8 +23,39 @@ function cellStyle(state: 'correct' | 'partial' | 'wrong') {
   return { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--soft)', color: 'var(--muted)' }
 }
 
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/)
+  const first = parts[0]?.[0] ?? ''
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : ''
+  return (first + last).toUpperCase()
+}
+
+function CharacterAvatar({ character, size = 32 }: { character: Character; size?: number }) {
+  const radius = size >= 48 ? 12 : 8
+  if (character.cover_url) {
+    return (
+      <img
+        src={character.cover_url}
+        alt=""
+        style={{ width: size, height: size, borderRadius: radius, objectFit: 'cover', flexShrink: 0 }}
+      />
+    )
+  }
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: radius,
+      background: 'rgba(255, 61, 113, 0.14)', border: '1px solid rgba(255, 61, 113, 0.3)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0, fontSize: Math.round(size * 0.38), fontWeight: 800, color: 'var(--accent)'
+    }}>
+      {getInitials(character.character_name)}
+    </div>
+  )
+}
+
 export default function CharacterdleGame({ slug, dateStr }: { slug: string; dateStr: string }) {
   const router = useRouter()
+  const [categories, setCategories] = useState<CategoryConfig[]>([])
   const [pool, setPool] = useState<Character[]>([])
   const [target, setTarget] = useState<Character | null>(null)
   const [guesses, setGuesses] = useState<GuessRow[]>([])
@@ -47,19 +66,30 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // 1. Cargar el pool del anime elegido, el personaje del día, y el progreso guardado
+  // 1. Cargar la configuración de categorías del anime, el pool de personajes,
+  // el personaje del día, y el progreso guardado.
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const { data } = await supabase
-        .from('character_guess_pool')
-        .select('id, character_name, cover_url, gender, arc, regiment, species, height_category, status')
-        .eq('anime_slug', slug)
-      const allCharacters = (data ?? []) as Character[]
+      const [{ data: catData }, { data: charData }] = await Promise.all([
+        supabase
+          .from('character_category_config')
+          .select('category_key, label, display_order, comparison_type, ordinal_order, hint_order')
+          .eq('anime_slug', slug)
+          .order('display_order', { ascending: true }),
+        supabase
+          .from('character_guess_pool')
+          .select('id, character_name, cover_url, attributes')
+          .eq('anime_slug', slug)
+      ])
+
+      const cats = (catData ?? []) as CategoryConfig[]
+      const allCharacters = (charData ?? []) as Character[]
       const shuffled = seededShuffle(allCharacters, slug + dateStr)
       const todayTarget = shuffled[0]
 
       if (!cancelled && todayTarget) {
+        setCategories(cats)
         setPool(allCharacters)
         setTarget(todayTarget)
 
@@ -70,7 +100,7 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
             const restoredGuesses: GuessRow[] = parsed.names
               .map(name => allCharacters.find(c => c.character_name === name))
               .filter((c): c is Character => !!c)
-              .map(c => ({ character: c, comparison: compareCharacters(c, todayTarget) }))
+              .map(c => ({ character: c, comparison: compareCharacters(c, todayTarget, cats) }))
             setGuesses(restoredGuesses)
             setWon(parsed.won)
             setGaveUp(parsed.gaveUp ?? false)
@@ -116,7 +146,7 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
     if (!chosen) return
     if (guesses.some(g => g.character.character_name === chosen.character_name)) return
 
-    const comparison = compareCharacters(chosen, target)
+    const comparison = compareCharacters(chosen, target, categories)
     const newRow: GuessRow = { character: chosen, comparison }
     setGuesses(prev => [newRow, ...prev])
     setGuess('')
@@ -137,26 +167,30 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
   }
 
   const finished = won || gaveUp
-  const unlockedHints = Math.min(Math.floor(guesses.length / HINT_EVERY), HINTS_ORDER.length)
+  const hintCategories = categories
+    .filter(c => c.hint_order != null)
+    .sort((a, b) => (a.hint_order ?? 0) - (b.hint_order ?? 0))
+  const unlockedHints = Math.min(Math.floor(guesses.length / HINT_EVERY), hintCategories.length)
+  const animeName = ANIME_NAMES[slug] ?? slug
 
   return (
     <div className="theme-anime theme-bg">
       <div className="page-shell">
-        <div className="page-card" style={{ width: 'min(100%, 920px)' }}>
+        <div className="page-card" style={{ width: 'min(100%, 1180px)' }}>
           <div className="daily-header">
             <div>
               <p className="daily-kicker">Adiviná el Personaje</p>
-              <h1 className="daily-title" style={{ fontSize: '1.9rem' }}>Attack on Titan</h1>
+              <h1 className="daily-title" style={{ fontSize: '1.9rem' }}>{animeName}</h1>
             </div>
             <button onClick={() => router.push('/anime/characterdle')} className="btn-secondary">Volver</button>
           </div>
 
           {unlockedHints > 0 && !finished && (
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
-              {HINTS_ORDER.slice(0, unlockedHints).map(hint => (
-                <div key={hint.field} style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(255, 61, 113, 0.08)', border: '1px solid rgba(255, 61, 113, 0.28)', flex: '1 1 140px' }}>
+              {hintCategories.slice(0, unlockedHints).map(hint => (
+                <div key={hint.category_key} style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(255, 61, 113, 0.08)', border: '1px solid rgba(255, 61, 113, 0.28)', flex: '1 1 140px' }}>
                   <span style={{ display: 'block', fontSize: 10, fontFamily: 'var(--font-code)', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{hint.label}</span>
-                  <strong style={{ color: '#fff', fontSize: 14 }}>{target[hint.field]}</strong>
+                  <strong style={{ color: '#fff', fontSize: 14 }}>{target.attributes[hint.category_key]}</strong>
                 </div>
               ))}
             </div>
@@ -164,9 +198,7 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
 
           {won && (
             <div className="daily-result is-win" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-              {target.cover_url && (
-                <img src={target.cover_url} alt={target.character_name} style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover' }} />
-              )}
+              <CharacterAvatar character={target} size={64} />
               <div>
                 <h3 style={{ margin: '0 0 4px', fontSize: 20 }}>¡Lo adivinaste!</h3>
                 <p style={{ margin: 0, color: 'var(--muted)' }}>El personaje era <strong>{target.character_name}</strong></p>
@@ -176,9 +208,7 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
 
           {gaveUp && !won && (
             <div className="daily-result is-loss" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-              {target.cover_url && (
-                <img src={target.cover_url} alt={target.character_name} style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover' }} />
-              )}
+              <CharacterAvatar character={target} size={64} />
               <div>
                 <h3 style={{ margin: '0 0 4px', fontSize: 20 }}>Te rendiste</h3>
                 <p style={{ margin: 0, color: 'var(--muted)' }}>El personaje era <strong>{target.character_name}</strong></p>
@@ -215,8 +245,9 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
                     <li
                       key={c.id}
                       onClick={() => submitGuess(c)}
-                      style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--table-row)', border: '1px solid var(--soft)', cursor: 'pointer', fontWeight: 600, color: '#fff' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 10, background: 'var(--table-row)', border: '1px solid var(--soft)', cursor: 'pointer', fontWeight: 600, color: '#fff' }}
                     >
+                      <CharacterAvatar character={c} size={32} />
                       {c.character_name}
                     </li>
                   ))}
@@ -231,33 +262,25 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
                 <thead>
                   <tr>
                     <th style={{ textAlign: 'left', fontSize: 10, fontFamily: 'var(--font-code)', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '0 6px' }}>Personaje</th>
-                    {COLUMNS.map(col => (
-                      <th key={col.key} style={{ fontSize: 10, fontFamily: 'var(--font-code)', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{col.label}</th>
+                    {categories.map(col => (
+                      <th key={col.category_key} style={{ fontSize: 10, fontFamily: 'var(--font-code)', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{col.label}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {guesses.map((g, i) => (
                     <tr key={i}>
-                      <td style={{ padding: '6px', minWidth: 170, color: '#fff', fontWeight: 700, fontSize: 13 }}>
+                      <td style={{ padding: '6px', minWidth: 150, color: '#fff', fontWeight: 700, fontSize: 13 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          {g.character.cover_url ? (
-                            <img
-                              src={g.character.cover_url}
-                              alt=""
-                              style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
-                            />
-                          ) : (
-                            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--soft)', flexShrink: 0 }} />
-                          )}
+                          <CharacterAvatar character={g.character} size={32} />
                           {g.character.character_name}
                         </div>
                       </td>
-                      {COLUMNS.map(col => {
-                        const cell = g.comparison[col.key]
+                      {categories.map(col => {
+                        const cell = g.comparison[col.category_key]
                         return (
-                          <td key={col.key} style={{ padding: 0 }}>
-                            <div style={{ ...cellStyle(cell.state), borderRadius: 10, padding: '9px 6px', textAlign: 'center', fontSize: 12, fontWeight: 700, minWidth: 76 }}>
+                          <td key={col.category_key} style={{ padding: 0 }}>
+                            <div style={{ ...cellStyle(cell.state), borderRadius: 10, padding: '9px 6px', textAlign: 'center', fontSize: 12, fontWeight: 700, minWidth: 68 }}>
                               {cell.value}
                               {cell.arrow === 'up' && ' ▲'}
                               {cell.arrow === 'down' && ' ▼'}
@@ -273,7 +296,7 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
           )}
 
           {guesses.length === 0 && (
-            <p className="status-box">Escribí el nombre de un personaje para arrancar. Verde es exacto, naranja está cerca (con flecha si tiene que ver con orden, como la altura o el momento de la historia), gris no tiene relación.</p>
+            <p className="status-box">Escribí el nombre de un personaje para arrancar. Verde es exacto, naranja está cerca (con flecha si tiene que ver con orden, como la edad, el grado o el momento de la historia), gris no tiene relación.</p>
           )}
         </div>
       </div>
