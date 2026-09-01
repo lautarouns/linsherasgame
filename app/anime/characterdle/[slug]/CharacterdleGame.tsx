@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { seededShuffle } from '@/lib/tracks'
-import { Character, CategoryConfig, Cell, compareCharacters, isWinningGuess } from '@/lib/characterdle'
+import { Character, CategoryConfig, Cell, compareCharacters } from '@/lib/characterdle'
 import { useRouter } from 'next/navigation'
 
 type GuessRow = {
@@ -153,7 +153,7 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
     setSuggestions([])
     setShowSuggestions(false)
 
-    if (isWinningGuess(comparison)) setWon(true)
+    if (chosen.character_name === target.character_name) setWon(true)
   }
 
   if (!isLoaded || !target) {
