@@ -153,14 +153,24 @@ export default function FutbolHome() {
         <h2 className="page-title sg-rise sg-d3">Fútbol</h2>
         <p className="page-subtitle sg-rise sg-d4">Entrá con tu nombre o uníndote a una sala.</p>
 
-        <button
-          type="button"
-          onClick={() => run('Carrera Diaria', () => router.push('/futbol/daily'))}
-          className="btn-principal sg-sheen sg-rise sg-d5"
-          style={{ width: 'min(100%, 320px)', marginBottom: 18 }}
-        >
-          Carrera Diaria
-        </button>
+        <div style={{ display: 'flex', gap: 12, width: 'min(100%, 480px)', marginBottom: 18 }}>
+          <button
+            type="button"
+            onClick={() => run('Carrera Diaria', () => router.push('/futbol/daily'))}
+            className="btn-principal sg-sheen sg-rise sg-d5"
+            style={{ flex: 1 }}
+          >
+            Carrera Diaria
+          </button>
+          <button
+            type="button"
+            onClick={() => run('Grid Diario', () => router.push('/futbol/grid-diario'))}
+            className="btn-principal sg-sheen sg-rise sg-d5"
+            style={{ flex: 1 }}
+          >
+            Grid Diario
+          </button>
+        </div>
 
         <main className="page-card sg-breathe">
           <label className="field-label" htmlFor="nickname">Tu nombre</label>

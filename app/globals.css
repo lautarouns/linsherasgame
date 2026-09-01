@@ -494,6 +494,69 @@ select {
   color: rgba(242, 240, 236, 0.7);
 }
 
+.grid-diario-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.grid-diario-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grid-diario-image {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  background: var(--table-row);
+}
+
+.grid-diario-image-empty {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.grid-diario-input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: var(--field-bg);
+  color: var(--foreground);
+  font-size: 12px;
+}
+
+.grid-diario-input.is-correct {
+  border-color: #34d399;
+  background: rgba(52, 211, 153, 0.16);
+}
+
+.grid-diario-input.is-incorrect {
+  border-color: #f87171;
+  background: rgba(248, 113, 113, 0.16);
+}
+
+.grid-diario-score {
+  margin: 18px 0 0;
+  text-align: center;
+  color: var(--accent);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+@media (max-width: 700px) {
+  .grid-diario-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* ---------- Fields & buttons ---------- */
 
 .form-field,
