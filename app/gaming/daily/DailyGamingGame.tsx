@@ -110,11 +110,15 @@ export default function DailyGamingGame({ dateStr }: { dateStr: string }) {
     const isCorrect = normalize(candidate) === normalize(targetGame.title)
 
     if (isCorrect) {
+      new Audio('/audios/correcto.mp3').play().catch(e => console.log('Audio error:', e));
       setStatus('win')
-    } else if (attempt < maxAttempts) {
-      setAttempt(a => a + 1)
     } else {
-      setStatus('loss')
+      new Audio('/audios/error.mp3').play().catch(e => console.log('Audio error:', e));
+      if (attempt < maxAttempts) {
+        setAttempt(a => a + 1)
+      } else {
+        setStatus('loss')
+      }
     }
     setGuess('')
     setShowSuggestions(false)

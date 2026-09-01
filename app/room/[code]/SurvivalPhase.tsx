@@ -147,11 +147,13 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
     const isCorrect = normalize(baseTitle(candidate)) === normalize(baseTitle(track.title))
 
     if (isCorrect) {
+      new Audio('/audios/correcto.mp3').play().catch(e => console.log('Audio error:', e));
       setGuessed(c => c + 1)
       setIndex(i => Math.min(tracks.length - 1, i + 1))
       setGuess('')
       setSuggestions([])
     } else {
+      new Audio('/audios/error.mp3').play().catch(e => console.log('Audio error:', e));
       setEffectiveDeadline(d => (d !== null ? d - 5000 : d))
       setGuess('')
       setSuggestions([])

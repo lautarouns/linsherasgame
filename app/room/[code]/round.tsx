@@ -249,6 +249,7 @@ export default function RoundPhase({
     const isCorrect = normalize(baseTitle(candidate)) === normalize(baseTitle(round.picks.track_name))
 
     if (!isCorrect) {
+      new Audio('/audios/error.mp3').play().catch(e => console.log('Audio error:', e));
       setShowWrong(true)
       setGuess('')
       setSuggestions([])
@@ -258,6 +259,8 @@ export default function RoundPhase({
       isSubmitting.current = false 
       return
     }
+
+    new Audio('/audios/correcto.mp3').play().catch(e => console.log('Audio error:', e));
 
     const elapsedMs = (roundDuration - secondsLeft) * 1000
     const points = Math.max(

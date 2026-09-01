@@ -161,9 +161,12 @@ export default function DueloSincronoPhase({
     const isCorrect = fullNormalizedTarget === normalizedCandidate || targetParts.includes(normalizedCandidate)
 
     if (!isCorrect) {
+      new Audio('/audios/error.mp3').play().catch(e => console.log('Audio error:', e));
       setGuess('')
       return
     }
+
+    new Audio('/audios/correcto.mp3').play().catch(e => console.log('Audio error:', e));
 
     const nextWinner = { playerId, nickname: nickname ?? 'Jugador' }
     winnerRef.current = nextWinner

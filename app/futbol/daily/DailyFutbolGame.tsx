@@ -67,8 +67,10 @@ export default function DailyFutbolGame({ dateStr }: { dateStr: string }) {
     const isCorrect = fullNormalizedTarget === normalizedCandidate || targetParts.includes(normalizedCandidate)
 
     if (isCorrect) {
+      new Audio('/audios/correcto.mp3').play().catch(e => console.log('Audio error:', e));
       setStatus('win')
     } else {
+      new Audio('/audios/error.mp3').play().catch(e => console.log('Audio error:', e));
       if (attempt < maxAttempts) {
         setAttempt(a => a + 1)
       } else {

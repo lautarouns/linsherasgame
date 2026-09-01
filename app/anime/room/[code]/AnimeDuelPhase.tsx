@@ -207,6 +207,7 @@ export default function AnimeDuelPhase({
     const isCorrect = normalize(candidate) === normalize(duel.anime_title)
 
     if (!isCorrect) {
+      new Audio('/audios/error.mp3').play().catch(e => console.log('Audio error:', e));
       setShowWrong(true)
       setGuess('')
       setSuggestions([])
@@ -214,6 +215,8 @@ export default function AnimeDuelPhase({
       isSubmitting.current = false
       return
     }
+
+    new Audio('/audios/correcto.mp3').play().catch(e => console.log('Audio error:', e));
 
     // Intento atómico: solo gana quien logre pasar winner_player_id de null a su id.
     const { data: claimed } = await supabase
