@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { getDailyPlayerId } from '@/lib/dailyPlayer'
 import { seededShuffle } from '@/lib/tracks'
+import IntroScreen from './IntroScreen'
 
 type GameStatus = 'unplayed' | 'progress' | 'solved' | 'lost'
 type GameKey = 'songlio' | 'futbol' | 'gaming' | 'anime' | 'movies'
@@ -64,6 +65,12 @@ export default function HubPage() {
   const today = new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'long' }).format(new Date())
 
   const [progress, setProgress] = useState<Record<GameKey, Progress>>(DEFAULT_PROGRESS)
+  const [intro, setIntro] = useState<'in' | 'out' | 'done'>('in')
+
+  function startGame() {
+    setIntro('out')
+    setTimeout(() => setIntro('done'), 900)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -185,6 +192,12 @@ export default function HubPage() {
         </div>
 
       </div>
+
+      {intro !== 'done' && (
+        <div className={intro === 'out' ? 'intro-wrap is-leaving' : 'intro-wrap'}>
+          <IntroScreen onStart={startGame} />
+        </div>
+      )}
     </div>
   )
 }
