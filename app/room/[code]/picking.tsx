@@ -104,7 +104,7 @@ export default function PickingPhase({
   // host y el invitado estaban en la misma red, se peleaban por el mismo
   // cupo), y seguís pudiendo buscar cualquier canción, no solo las del pool.
   useEffect(() => {
-    if (query.trim().length < 2) {
+    if (query.trim().length < 1) {
       setResults([])
       return
     }
@@ -136,7 +136,7 @@ export default function PickingPhase({
   }, [roomId, playerId])
 
   const doneWithMine = myPicks.length >= songsPerPlayer
-  const visibleResults = query.length < 2 ? [] : results
+  const visibleResults = query.length < 1 ? [] : results
   const pct = timeWindow > 0
     ? Math.max(0, Math.min(100, (secondsLeft / timeWindow) * 100))
     : 0

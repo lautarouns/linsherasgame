@@ -154,7 +154,7 @@ export default function AnimeDuelPhase({
   useEffect(() => {
     const t = setTimeout(() => {
       const q = guess.trim().toLowerCase()
-      if (q.length < 2 || showReveal || pool.length === 0) {
+      if (q.length < 1 || showReveal || pool.length === 0) {
         setSuggestions([])
         return
       }
@@ -302,7 +302,7 @@ export default function AnimeDuelPhase({
             className="guess-input"
             value={guess}
             onChange={e => { setGuess(e.target.value); setShowWrong(false); setShowSuggestions(true) }}
-            onFocus={() => { if (guess.trim().length >= 2) setShowSuggestions(true) }}
+            onFocus={() => { if (guess.trim().length >= 1) setShowSuggestions(true) }}
             onKeyDown={e => e.key === 'Enter' && submitGuess()}
             placeholder="Nombre del anime"
             autoFocus

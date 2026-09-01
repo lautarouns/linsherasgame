@@ -37,20 +37,19 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
   const [isLose, setIsLose] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
-  // Pool compartido con Supervivencia y Duelo (cacheado en Supabase), usado acá
-  // solo para elegir la canción del día y para filtrar el buscador localmente.
   const [pool, setPool] = useState<Track[]>([])
 
   const [suggestions, setSuggestions] = useState<Track[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [volume, setVolume] = useState(0.7)
 
+  const [triedTitles, setTriedTitles] = useState<string[]>([])
+
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const playbackTimerRef = useRef<number | null>(null)
 
   const allowedSeconds = DAILY_SEGMENTS[Math.min(currentAttempt, DAILY_SEGMENTS.length - 1)]
 
-  // Guarda el progreso actual en Supabase (upsert por día + jugador anónimo)
   const saveProgress = useCallback(async (
     history: Attempt[],
     nextAttempt: number,
@@ -72,7 +71,6 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
     }, { onConflict: 'date_id,player_id' })
   }, [targetDate])
 
-  // Cargar el pool una sola vez al montar (viene del caché compartido; no pega a iTunes salvo que esté vencido)
   useEffect(() => {
     let cancelled = false
     loadTrackPool()
@@ -81,7 +79,6 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
     return () => { cancelled = true }
   }, [])
 
-  // CARGA DE CANCIÓN + PROGRESO GUARDADO
   useEffect(() => {
     async function fetchDailyTrack() {
       try {
@@ -91,6 +88,7 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
         setAttemptHistory([])
         setCurrentAttempt(0)
         setMessage(null)
+        setTriedTitles([])
 
         const { data: existingSong } = await supabase
           .from('daily_songs')
@@ -108,9 +106,6 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
             previewUrl: existingSong.preview_url
           }
         } else if (isToday) {
-          // Solo se genera una canción nueva si es el día de hoy y todavía no existe.
-          // Se elige de forma determinística (misma semilla = misma canción para todos)
-          // dentro del mismo pool que usan Supervivencia y Duelo.
           const todaysPool = await loadTrackPool()
           if (todaysPool.length === 0) throw new Error('No se encontraron canciones válidas')
 
@@ -139,7 +134,6 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
 
         setDailyTrack(trackData)
 
-        // Restaurar progreso guardado de este jugador para este día, si existe
         const playerId = getDailyPlayerId()
         if (playerId) {
           const { data: progress } = await supabase
@@ -172,11 +166,10 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
     fetchDailyTrack()
   }, [targetDate, isToday])
 
-  // Buscador en vivo: filtra el pool ya cargado en memoria, sin pegarle a la red
   useEffect(() => {
     const timer = setTimeout(() => {
       const q = guess.trim().toLowerCase()
-      if (q.length < 2) {
+      if (q.length < 1) {
         setSuggestions([])
         setShowSuggestions(false)
         return
@@ -185,13 +178,14 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
 
       setShowSuggestions(true)
       const matches = pool
+        .filter(t => !triedTitles.includes(normalize(baseTitle(t.title))))
         .filter(t => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q))
         .slice(0, 6)
       setSuggestions(matches)
     }, 150)
 
     return () => clearTimeout(timer)
-  }, [guess, isWin, isLose, pool])
+  }, [guess, isWin, isLose, pool, triedTitles])
 
   useEffect(() => {
     return () => {
@@ -239,6 +233,7 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
     const newHistory = [...attemptHistory, { text: historyEntry, artistMatch }]
     setAttemptHistory(newHistory)
     setShowSuggestions(false)
+    setTriedTitles(prev => [...prev, normalize(baseTitle(guessTitle))])
 
     if (normalize(baseTitle(guessTitle)) === normalize(baseTitle(dailyTrack.title))) {
       setIsWin(true)
@@ -396,7 +391,7 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
             type="text"
             value={guess}
             onChange={event => setGuess(event.target.value)}
-            onFocus={() => { if (guess.trim().length >= 2) setShowSuggestions(true) }}
+            onFocus={() => { if (guess.trim().length >= 1) setShowSuggestions(true) }}
             onKeyDown={event => {
               if (event.key === 'Enter') handleManualGuess()
             }}

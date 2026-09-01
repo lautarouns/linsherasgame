@@ -171,7 +171,7 @@ export default function SurvivalPhase({ roomId, playerId, roomCode, roundDeadlin
   useEffect(() => {
     const t = setTimeout(() => {
       const q = guess.trim().toLowerCase()
-      if (q.length < 2 || isFinished || tracks.length === 0) {
+      if (q.length < 1 || isFinished || tracks.length === 0) {
         setSuggestions([])
         return
       }

@@ -47,6 +47,16 @@
  --accent-text: #200008;
  --accent-soft: rgba(255, 61, 113, 0.10);
  --accent-line: rgba(255, 61, 113, 0.28);
+ --accent-rgb: 255, 61, 113;
+}
+
+.theme-movies {
+ --accent: #3d8bff; /* vivid cinema blue */
+ --accent-hover: #6fa8ff;
+ --accent-text: #04122b;
+ --accent-soft: rgba(61, 139, 255, 0.10);
+ --accent-line: rgba(61, 139, 255, 0.28);
+ --accent-rgb: 61, 139, 255;
 }
 
 @theme inline {
@@ -1583,6 +1593,7 @@ select {
 .theme-futbol  .hub-status { background: rgba(38, 255, 106, 0.10); border-color: rgba(38, 255, 106, 0.28); color: #26ff6a; }
 .theme-gaming  .hub-status { background: rgba(155, 89, 255, 0.10); border-color: rgba(155, 89, 255, 0.28); color: #b78cff; }
 .theme-anime   .hub-status { background: rgba(255, 61, 113, 0.10); border-color: rgba(255, 61, 113, 0.28); color: #ff6f96; }
+.theme-movies  .hub-status { background: rgba(61, 139, 255, 0.10); border-color: rgba(61, 139, 255, 0.28); color: #6fa8ff; }
 
 /* Sin jugar se atenúa para que el estado activo destaque */
 .hub-status[data-status='unplayed'] {

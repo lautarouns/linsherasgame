@@ -219,7 +219,7 @@ export default function RoundPhase({
   // patrón que la fase de elección, así aparece cualquier tema válido.
   useEffect(() => {
     const q = guess.trim()
-    if (q.length < 2 || correct || showReveal) {
+    if (q.length < 1 || correct || showReveal) {
       setSuggestions([])
       return
     }
@@ -393,7 +393,7 @@ export default function RoundPhase({
               className="guess-input"
               value={guess}
               onChange={e => { setGuess(e.target.value); setShowWrong(false); setShowSuggestions(true) }}
-              onFocus={() => { if (guess.trim().length >= 2) setShowSuggestions(true) }}
+              onFocus={() => { if (guess.trim().length >= 1) setShowSuggestions(true) }}
               onKeyDown={e => e.key === 'Enter' && submitGuess()}
               placeholder="Nombre de la canción"
               autoComplete="off"

@@ -6,13 +6,14 @@ import { getDailyPlayerId } from '@/lib/dailyPlayer'
 import { seededShuffle } from '@/lib/tracks'
 
 type GameStatus = 'unplayed' | 'progress' | 'solved' | 'lost'
-type GameKey = 'songlio' | 'futbol' | 'gaming' | 'anime'
+type GameKey = 'songlio' | 'futbol' | 'gaming' | 'anime' | 'movies'
 
 // Cantidad fija de intentos por modo (Fútbol es variable, se calcula aparte)
 const FIXED_MAX_ATTEMPTS: Record<Exclude<GameKey, 'futbol'>, number> = {
   songlio: 4,
   gaming: 12,
   anime: 12,
+  movies: 99, // sin límite de intentos: mostramos un número alto para el "X/Y" del hub
 }
 
 function todayStr() {
@@ -38,6 +39,7 @@ const GAMES: GameCard[] = [
   { key: 'futbol', href: '/futbol', label: 'Fútbol', tagline: 'Adiviná el jugador', icon: '⚽', theme: 'theme-futbol', tint: 'rgba(38,255,106' },
   { key: 'gaming', href: '/gaming', label: 'Videojuegos', tagline: 'Adiviná el juego', icon: '🎮', theme: 'theme-gaming', tint: 'rgba(155,89,255' },
   { key: 'anime', href: '/anime', label: 'Anime', tagline: 'Adiviná el anime', icon: '🎌', theme: 'theme-anime', tint: 'rgba(255,61,113' },
+  { key: 'movies', href: '/movies', label: 'Cine', tagline: 'Adiviná la película o serie', icon: '🎬', theme: 'theme-movies', tint: 'rgba(61,139,255' },
 ]
 
 type Progress = { status: GameStatus; attempt: number; max: number }
@@ -47,12 +49,13 @@ const DEFAULT_PROGRESS: Record<GameKey, Progress> = {
   futbol: { status: 'unplayed', attempt: 0, max: 6 },
   gaming: { status: 'unplayed', attempt: 0, max: FIXED_MAX_ATTEMPTS.gaming },
   anime: { status: 'unplayed', attempt: 0, max: FIXED_MAX_ATTEMPTS.anime },
+  movies: { status: 'unplayed', attempt: 0, max: FIXED_MAX_ATTEMPTS.movies },
 }
 
 function statusLabel(status: GameStatus, attempt: number, max: number) {
   if (status === 'solved') return 'RESUELTO'
   if (status === 'lost') return 'PERDISTE'
-  if (status === 'progress') return `${attempt}/${max} INTENTOS`
+  if (status === 'progress') return max >= 90 ? `${attempt} INTENTOS` : `${attempt}/${max} INTENTOS`
   return 'SIN JUGAR'
 }
 
@@ -66,7 +69,7 @@ export default function HubPage() {
     let cancelled = false
     const dateStr = todayStr()
 
-    function readLocal(key: 'futbol' | 'gaming' | 'anime') {
+    function readLocal(key: 'futbol' | 'gaming' | 'anime' | 'movies') {
       const saved = localStorage.getItem(`${key}_daily_${dateStr}`)
       if (!saved) return null
       try {
@@ -87,6 +90,7 @@ export default function HubPage() {
       const gaming = readLocal('gaming')
       const anime = readLocal('anime')
       const futbolLocal = readLocal('futbol')
+      const movies = readLocal('movies')
 
       // Fútbol: el máximo de intentos depende de cuántos clubes tiene el
       // jugador del día, así que lo recalculamos igual que su propio componente.
@@ -136,6 +140,7 @@ export default function HubPage() {
         futbol: futbolLocal ? { ...futbolLocal, max: futbolMax } : { ...DEFAULT_PROGRESS.futbol, max: futbolMax },
         gaming: gaming ? { ...gaming, max: FIXED_MAX_ATTEMPTS.gaming } : DEFAULT_PROGRESS.gaming,
         anime: anime ? { ...anime, max: FIXED_MAX_ATTEMPTS.anime } : DEFAULT_PROGRESS.anime,
+        movies: movies ? { ...movies, max: FIXED_MAX_ATTEMPTS.movies } : DEFAULT_PROGRESS.movies,
       })
     }
 
@@ -151,7 +156,7 @@ export default function HubPage() {
           <div className="hub-header-text">
             <div className="hub-eyebrow">{today}</div>
             <h1 className="animated-title" style={{ fontSize: '3.5rem', margin: 0, lineHeight: 1 }}>Linsheradle</h1>
-            <p className="hub-sub">Cuatro juegos diarios. Uno nuevo cada día a medianoche.</p>
+            <p className="hub-sub">Cinco juegos diarios. Uno nuevo cada día a medianoche.</p>
           </div>
         </header>
 
