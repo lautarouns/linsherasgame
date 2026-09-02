@@ -40,11 +40,22 @@ export default function GridDiarioPhase({ dateStr }: { dateStr: string }) {
   const [results, setResults] = useState<boolean[][] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [yaJugadoHoy, setYaJugadoHoy] = useState(false)
 
   useEffect(() => {
     let cancelled = false
 
     async function loadPlayers() {
+      // Verificamos en localStorage si ya completó el grid de hoy antes de llamar a la DB
+      const estadoGuardado = localStorage.getItem(`grid_diario_${dateStr}`)
+      if (estadoGuardado === 'completado') {
+        if (!cancelled) {
+          setYaJugadoHoy(true)
+          setIsLoading(false)
+        }
+        return
+      }
+
       const { data, error: loadError } = await supabase
         .from('football_players')
         .select('name, clubs, image_url, nationality, difficulty')
@@ -94,17 +105,14 @@ export default function GridDiarioPhase({ dateStr }: { dateStr: string }) {
       
       const rawTarget = player.name || ''
       const fullTargetName = normalize(rawTarget)
-      // Separamos el string original ANTES de normalizar para no perder los espacios
       const targetParts = rawTarget.split(' ').map(part => normalize(part))
       
-      // Validación flexible: nombre completo, una de las palabras, o coincidencia parcial (min 4 letras)
       const isNameCorrect = candidateName !== '' && (
         fullTargetName === candidateName || 
         targetParts.includes(candidateName) ||
         (fullTargetName.includes(candidateName) && candidateName.length >= 4)
       )
 
-      // Validación de país estricta
       const candidateNat = normalize(answers[index].nationality.trim())
       const targetNat = player.nationality ? normalize(player.nationality) : ''
       
@@ -112,6 +120,11 @@ export default function GridDiarioPhase({ dateStr }: { dateStr: string }) {
 
       return [isNameCorrect, isNatCorrect]
     }))
+
+    // Al enviar los resultados del último nivel, guardamos que ya jugó hoy
+    if (isLastLevel) {
+      localStorage.setItem(`grid_diario_${dateStr}`, 'completado')
+    }
   }
 
   const nextLevel = () => {
@@ -126,6 +139,25 @@ export default function GridDiarioPhase({ dateStr }: { dateStr: string }) {
 
   if (isLoading) {
     return <div className="theme-futbol"><div className="page-shell"><div className="page-card">Cargando Grid Diario...</div></div></div>
+  }
+
+  // Pantalla de bloqueo si ya jugó
+  if (yaJugadoHoy) {
+    return (
+      <div className="theme-futbol">
+        <div className="page-shell">
+          <main className="daily-card page-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '300px', textAlign: 'center' }}>
+            <h1 className="daily-title" style={{ marginBottom: 10 }}>¡Ya jugaste hoy!</h1>
+            <p className="page-subtitle" style={{ marginBottom: 30 }}>
+              Volvé mañana a partir de las 00:00 para un nuevo Grid Diario.
+            </p>
+            <button className="btn-principal" onClick={() => router.push('/futbol')}>
+              Volver al menú
+            </button>
+          </main>
+        </div>
+      </div>
+    )
   }
 
   if (error) {

@@ -1,4 +1,5 @@
 'use client'
+
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -9,12 +10,11 @@ import IntroScreen from './IntroScreen'
 type GameStatus = 'unplayed' | 'progress' | 'solved' | 'lost'
 type GameKey = 'songlio' | 'futbol' | 'gaming' | 'anime' | 'movies'
 
-// Cantidad fija de intentos por modo (Fútbol es variable, se calcula aparte)
 const FIXED_MAX_ATTEMPTS: Record<Exclude<GameKey, 'futbol'>, number> = {
   songlio: 4,
   gaming: 12,
   anime: 12,
-  movies: 99, // sin límite de intentos: mostramos un número alto para el "X/Y" del hub
+  movies: 99, 
 }
 
 function todayStr() {
@@ -66,8 +66,20 @@ export default function HubPage() {
 
   const [progress, setProgress] = useState<Record<GameKey, Progress>>(DEFAULT_PROGRESS)
   const [intro, setIntro] = useState<'in' | 'out' | 'done'>('in')
+  const [cargando, setCargando] = useState(true)
+
+  useEffect(() => {
+    // Revisamos si en esta sesión ya se vio la intro
+    const introJugada = sessionStorage.getItem('introJugada')
+    if (introJugada === 'true') {
+      setIntro('done')
+    }
+    setCargando(false)
+  }, [])
 
   function startGame() {
+    // Guardamos en la memoria de la pestaña que ya vimos la intro
+    sessionStorage.setItem('introJugada', 'true')
     setIntro('out')
     setTimeout(() => setIntro('done'), 900)
   }
@@ -99,8 +111,6 @@ export default function HubPage() {
       const futbolLocal = readLocal('futbol')
       const movies = readLocal('movies')
 
-      // Fútbol: el máximo de intentos depende de cuántos clubes tiene el
-      // jugador del día, así que lo recalculamos igual que su propio componente.
       let futbolMax = DEFAULT_PROGRESS.futbol.max
       try {
         const { data } = await supabase.from('football_players').select('*')
@@ -119,7 +129,6 @@ export default function HubPage() {
         console.error('No se pudo calcular el máximo de intentos de fútbol', e)
       }
 
-      // Songlio guarda el progreso en Supabase (no en localStorage)
       let songlio: { status: GameStatus; attempt: number } | null = null
       try {
         const playerId = getDailyPlayerId()
@@ -154,6 +163,9 @@ export default function HubPage() {
     loadAll()
     return () => { cancelled = true }
   }, [])
+
+  // Evita parpadeos mientras lee el sessionStorage
+  if (cargando) return null
 
   return (
     <div style={{ minHeight: '100vh', background: bg, padding: '56px 20px 120px' }}>
