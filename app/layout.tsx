@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Adiviná la canción",
-  description: "Juego de salas para adivinar canciones con amigos.",
+  title: "Linsheradle",
+  description: "Juego de adivinanza de canciones, jugadores, videojuegos, animes y películas.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

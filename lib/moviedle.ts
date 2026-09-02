@@ -20,18 +20,34 @@ function compareExact(guessVal: string, targetVal: string): Cell {
   return { value: guessVal, state: guessVal === targetVal ? 'correct' : 'wrong' }
 }
 
-function compareOrdinalStr(guessVal: string, targetVal: string, order: string[]): Cell {
+// Igual que arco/altura/grado en Adiviná el Personaje: solo se marca amarillo
+// si está a `closeThreshold` posiciones o menos en la lista de orden — si
+// está más lejos, se marca gris pero conserva la flecha para orientar.
+function compareOrdinalStr(guessVal: string, targetVal: string, order: string[], closeThreshold: number): Cell {
+  if (guessVal === targetVal) {
+    return { value: guessVal, state: 'correct' }
+  }
+
   const gi = order.indexOf(guessVal)
   const ti = order.indexOf(targetVal)
-  if (gi === -1 || ti === -1 || gi === ti) {
-    return { value: guessVal, state: gi === ti ? 'correct' : 'wrong' }
+
+  if (gi === -1 || ti === -1) {
+    return { value: guessVal, state: 'wrong' }
   }
-  return { value: guessVal, state: 'partial', arrow: gi < ti ? 'up' : 'down' }
+
+  const arrow = gi < ti ? 'up' : 'down'
+  const distance = Math.abs(gi - ti)
+  return { value: guessVal, state: distance <= closeThreshold ? 'partial' : 'wrong', arrow }
 }
 
-function compareNumeric(guessVal: number, targetVal: number): Cell {
+// Para año e IMDb: solo se marca amarillo si la diferencia real (en años, o
+// en puntos de rating) es chica — si está lejos, se marca gris pero
+// conserva la flecha.
+function compareNumeric(guessVal: number, targetVal: number, closeThreshold: number): Cell {
   if (guessVal === targetVal) return { value: String(guessVal), state: 'correct' }
-  return { value: String(guessVal), state: 'partial', arrow: guessVal < targetVal ? 'up' : 'down' }
+  const arrow = guessVal < targetVal ? 'up' : 'down'
+  const distance = Math.abs(guessVal - targetVal)
+  return { value: String(guessVal), state: distance <= closeThreshold ? 'partial' : 'wrong', arrow }
 }
 
 // Los géneros son una lista: verde si son exactamente los mismos, amarillo si
@@ -68,10 +84,10 @@ export type MovieComparison = {
 
 export function compareMovies(guess: Movie, target: Movie): MovieComparison {
   return {
-    year: compareNumeric(guess.year, target.year),
+    year: compareNumeric(guess.year, target.year, 10),
     genres: compareGenres(guess.genres, target.genres),
-    classification: compareOrdinalStr(guess.classification, target.classification, CLASSIFICATION_ORDER),
-    imdb_rating: compareNumeric(guess.imdb_rating, target.imdb_rating),
+    classification: compareOrdinalStr(guess.classification, target.classification, CLASSIFICATION_ORDER, 1),
+    imdb_rating: compareNumeric(guess.imdb_rating, target.imdb_rating, 0.5),
     studio: compareExact(guess.studio, target.studio),
     director: compareCastCross(guess.director, target.director, target.main_actor),
     main_actor: compareCastCross(guess.main_actor, target.main_actor, target.director),

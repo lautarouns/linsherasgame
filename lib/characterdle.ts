@@ -22,15 +22,32 @@ function compareExact(guessVal: string, targetVal: string): Cell {
 }
 
 // Para categorías con un orden lógico (arco, altura, grado): si no coincide
-// exacto, se muestra en amarillo con una flecha indicando si el objetivo
-// está "más arriba" o "más abajo" en ese orden.
+// exacto, se muestra en amarillo con una flecha SOLO cuando está cerca (a 1
+// o 2 posiciones de diferencia en la lista de orden) — si está lejos, se
+// marca gris, pero igual conserva la flecha para orientar la dirección.
+const ORDINAL_CLOSE_THRESHOLD = 2
+
 function compareOrdinal(guessVal: string, targetVal: string, order: string[]): Cell {
+  // Coincidencia exacta siempre es correcta, esté o no la lista de orden.
+  if (guessVal === targetVal) {
+    return { value: guessVal, state: 'correct' }
+  }
+
   const gi = order.indexOf(guessVal)
   const ti = order.indexOf(targetVal)
-  if (gi === -1 || ti === -1 || gi === ti) {
-    return { value: guessVal, state: gi === ti ? 'correct' : 'wrong' }
+
+  // Si alguno de los dos valores no figura en la lista de orden, no hay forma
+  // de calcular una dirección confiable — se marca sin relación (gris), nunca
+  // "correcto" solo porque los dos dieron -1 en la búsqueda.
+  if (gi === -1 || ti === -1) {
+    return { value: guessVal, state: 'wrong' }
   }
-  return { value: guessVal, state: 'partial', arrow: gi < ti ? 'up' : 'down' }
+
+  const arrow = gi < ti ? 'up' : 'down'
+  const distance = Math.abs(gi - ti)
+  const isClose = distance <= ORDINAL_CLOSE_THRESHOLD
+
+  return { value: guessVal, state: isClose ? 'partial' : 'wrong', arrow }
 }
 
 // Para categorías numéricas (como la edad): compara los números directamente,
