@@ -170,6 +170,14 @@ export default function AnimeHome() {
           >
             Adiviná el Personaje
           </button>
+          <button
+            type="button"
+            onClick={() => run('Grid Diario', () => router.push('/anime/grid-diario'))}
+            className="btn-principal sg-sheen sg-rise sg-d5"
+            style={{ flex: 1 }}
+          >
+            Grid Diario
+          </button>
         </div>
 
         <main className="page-card sg-breathe">
