@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { nowSynced } from '@/lib/serverTime'
 import { normalize } from '@/lib/tracks'
+import { ANIME_NAMES, fetchCharacterImageLive, cacheCharacterImage } from '@/lib/animeImage'
 
 const DEFAULT_ROUND_SECONDS = 20
 const REVEAL_SECONDS = 4
@@ -47,15 +48,22 @@ export default function AnimeDuelPhase({
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
 
-  // Foto del personaje para la pantalla de revelación: se busca en vivo
-  // (sin guardarla en la base) porque no tenemos 120+ fotos cargadas a mano.
-  const [revealImage, setRevealImage] = useState<string | null>(null)
+  // Foto del personaje, mostrada tanto durante el guess como en la
+  // revelación. Si no está cacheada en la base se busca en vivo y se guarda.
+  const [characterImage, setCharacterImage] = useState<string | null>(null)
 
-  // 0. Cargar el pool de personajes una sola vez
+  // 0. Cargar el pool de personajes una sola vez — combina `anime_characters`
+  // con los títulos de `character_guess_pool` (mapeados desde ANIME_NAMES),
+  // para que el buscador conozca todos los animes posibles.
   useEffect(() => {
     let cancelled = false
     supabase.from('anime_characters').select('*').then(({ data }) => {
-      if (!cancelled) setPool((data ?? []) as AnimeCharacter[])
+      if (cancelled) return
+      const manual = (data ?? []) as AnimeCharacter[]
+      const fromGrid = Object.values(ANIME_NAMES).map(anime_title => ({
+        character_name: '', anime_title, cover_url: null,
+      }))
+      setPool([...manual, ...fromGrid])
     })
     return () => { cancelled = true }
   }, [])
@@ -72,7 +80,7 @@ export default function AnimeDuelPhase({
       setSecondsLeft(roundDuration)
       setSuggestions([])
       setShowSuggestions(false)
-      setRevealImage(null)
+      setCharacterImage(null)
       isSubmitting.current = false
 
       const { data } = await supabase
@@ -165,48 +173,29 @@ export default function AnimeDuelPhase({
     return () => clearTimeout(t)
   }, [guess, showReveal, pool])
 
-  // 6. Al llegar la revelación, buscamos la foto del personaje en vivo. Si el
-  // personaje ya tiene cover_url cargado en la base, usamos ese directamente
-  // y no pegamos a la API; si no, la guardamos en `anime_characters` apenas
-  // la encontramos para no volver a pedirla en futuros duelos.
+  // 6. Buscamos la foto del personaje apenas carga la ronda (no solo en la
+  // revelación), con el mismo buscador con reintentos y segunda fuente
+  // (Jikan + AniList) que usa el Grid Diario. Si el personaje ya tiene
+  // cover_url cargado en la base, se usa directo y no se pega a la API; si
+  // no, apenas se encuentra se guarda en `character_guess_pool` para no
+  // volver a pedirla en futuros duelos o Grid Diarios.
   useEffect(() => {
-    if (!showReveal || !duel) return
-    if (duel.cover_url) {
-      setRevealImage(duel.cover_url)
-      return
-    }
+    if (!duel) return
     let cancelled = false
 
-    const fetchImage = () =>
-      fetch(`https://api.jikan.moe/v4/characters?q=${encodeURIComponent(duel.character_name)}&limit=1`)
-        .then(r => (r.ok ? r.json() : null))
-        .then(data => data?.data?.[0]?.images?.jpg?.image_url ?? null)
-        .catch(() => null)
-
     ;(async () => {
-      let img = await fetchImage()
-      if (!img && !cancelled) {
-        // Jikan es gratuito y a veces devuelve 504 por saturación puntual —
-        // esperamos un segundo y probamos una vez más antes de rendirnos.
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        if (cancelled) return
-        img = await fetchImage()
+      if (duel.cover_url) {
+        if (!cancelled) setCharacterImage(duel.cover_url)
+        return
       }
-      if (!cancelled) setRevealImage(img)
-      if (img) {
-        supabase
-          .from('anime_characters')
-          .update({ cover_url: img })
-          .eq('character_name', duel.character_name)
-          .eq('anime_title', duel.anime_title)
-          .then(({ error }) => {
-            if (error) console.log(`[anime-duel] no se pudo guardar la foto de "${duel.character_name}"`, error)
-          })
-      }
+      const img = await fetchCharacterImageLive(duel.character_name)
+      if (cancelled) return
+      setCharacterImage(img)
+      if (img) void cacheCharacterImage(duel.character_name, img)
     })()
 
     return () => { cancelled = true }
-  }, [showReveal, duel])
+  }, [duel?.id])
 
   const submitGuess = useCallback(async (guessTitle?: string) => {
     if (!duel || duel.winner_player_id || showReveal) return
@@ -270,8 +259,8 @@ export default function AnimeDuelPhase({
     return (
       <div className="reveal-panel">
         <span className="section-title" style={{ margin: 0 }}>Duelo {currentRound} de {totalRounds}</span>
-        {revealImage && (
-          <img className="reveal-art" src={revealImage} width={190} height={190} alt="" />
+        {characterImage && (
+          <img className="reveal-art" src={characterImage} width={190} height={190} alt="" />
         )}
         <h2 className="reveal-title">{duel.anime_title}</h2>
         <p className="reveal-artist">Personaje: {duel.character_name}</p>
@@ -303,7 +292,22 @@ export default function AnimeDuelPhase({
 
       <div style={{ padding: 30, borderRadius: 16, background: 'rgba(255,255,255,0.03)', margin: '16px 0', textAlign: 'center' }}>
         <span style={{ fontSize: 11, fontFamily: 'var(--font-code)', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Personaje</span>
-        <h2 style={{ margin: '10px 0 0', fontSize: 32, color: '#fff' }}>{duel.character_name}</h2>
+        {characterImage ? (
+          <img
+            src={characterImage}
+            alt="Personaje de anime"
+            style={{ width: 160, height: 160, borderRadius: 16, objectFit: 'cover', margin: '14px auto 0', display: 'block' }}
+          />
+        ) : (
+          <div style={{
+            width: 160, height: 160, borderRadius: 16, margin: '14px auto 0',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(255,255,255,0.05)', color: 'var(--muted)', fontSize: 13,
+          }}>
+            Sin foto
+          </div>
+        )}
+        <h2 style={{ margin: '14px 0 0', fontSize: 28, color: '#fff' }}>{duel.character_name}</h2>
       </div>
 
       <div className="guess-panel">

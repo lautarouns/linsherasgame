@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { normalize, seededShuffle } from '@/lib/tracks'
 import { supabase } from '@/lib/supabase'
+import { ANIME_NAMES, fetchCharacterImageLive, cacheCharacterImage } from '@/lib/animeImage'
 
 type Difficulty = 'easy' | 'medium' | 'hard'
 
@@ -38,104 +39,8 @@ const levelLabels: Record<Difficulty, string> = {
   hard: 'Difícil',
 }
 
-// Nombre legible por cada anime cargado — sumá acá si agregás uno nuevo.
-const ANIME_NAMES: Record<string, string> = {
-  'attack-on-titan': 'Attack on Titan',
-  'jujutsu-kaisen': 'Jujutsu Kaisen',
-  'one-piece': 'One Piece',
-  'naruto': 'Naruto',
-  'dragon-ball-z': 'Dragon Ball Z',
-  'death-note': 'Death Note',
-  'fullmetal-alchemist-brotherhood': 'Fullmetal Alchemist: Brotherhood',
-  'hunter-x-hunter': 'Hunter x Hunter',
-  'demon-slayer': 'Demon Slayer',
-  'neon-genesis-evangelion': 'Neon Genesis Evangelion',
-  'cowboy-bebop': 'Cowboy Bebop',
-  'steins-gate': 'Steins;Gate',
-  'made-in-abyss': 'Made in Abyss',
-  'serial-experiments-lain': 'Serial Experiments Lain',
-  'baccano': 'Baccano!',
-  'mushishi': 'Mushishi',
-  'odd-taxi': 'Odd Taxi',
-  'great-teacher-onizuka': 'Great Teacher Onizuka',
-  'ping-pong-the-animation': 'Ping Pong the Animation',
-  'paranoia-agent': 'Paranoia Agent',
-  'mononoke': 'Mononoke',
-  'my-hero-academia': 'My Hero Academia',
-  'jojos-bizarre-adventure': "JoJo's Bizarre Adventure",
-  'bleach': 'Bleach',
-  'haikyuu': 'Haikyuu!!',
-  'sailor-moon': 'Sailor Moon',
-  'cyberpunk-edgerunners': 'Cyberpunk: Edgerunners',
-  'inuyasha': 'Inuyasha',
-  'yu-yu-hakusho': 'Yu Yu Hakusho',
-  'tokyo-ghoul': 'Tokyo Ghoul',
-  'one-punch-man': 'One Punch Man',
-  'code-geass': 'Code Geass',
-  'monster': 'Monster'
-};
-
 const emptyAnswers = (): Answer[] =>
   Array.from({ length: 4 }, () => ({ name: '', anime: '' }))
-
-// Busca la foto de un personaje en vivo, sin guardarla en ningún lado —
-// primero contra Jikan (API de MyAnimeList) y, si no lo encuentra, contra
-// AniList (otra base de datos pública de anime) como segundo intento.
-async function fetchCharacterImageLive(name: string): Promise<string | null> {
-  const fetchJikanOnce = () =>
-    fetch(`https://api.jikan.moe/v4/characters?q=${encodeURIComponent(name)}&limit=1`)
-      .then(r => {
-        console.log(`[grid-diario] Jikan "${name}" → status ${r.status}`)
-        return r.ok ? r.json() : null
-      })
-      .then(data => data?.data?.[0]?.images?.jpg?.image_url ?? null)
-      .catch(e => { console.log(`[grid-diario] Jikan "${name}" → error`, e); return null })
-
-  const fetchAniList = () => {
-    const query = `query ($search: String) { Character(search: $search) { image { large } } }`
-    return fetch('https://graphql.anilist.co', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ query, variables: { search: name } })
-    })
-      .then(r => {
-        console.log(`[grid-diario] AniList "${name}" → status ${r.status}`)
-        return r.ok ? r.json() : null
-      })
-      .then(data => data?.data?.Character?.image?.large ?? null)
-      .catch(e => { console.log(`[grid-diario] AniList "${name}" → error`, e); return null })
-  }
-
-  // Jikan es gratuito y a veces devuelve 504 por saturación puntual — se
-  // reintenta una vez antes de pasar a la segunda fuente.
-  let img = await fetchJikanOnce()
-  if (!img) {
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    img = await fetchJikanOnce()
-  }
-  if (!img) {
-    img = await fetchAniList()
-  }
-
-  // Último intento: si el nombre completo no dio nada en ninguna de las dos
-  // fuentes, probamos solo con la última palabra (ej: "Sukuna" en vez de
-  // "Ryomen Sukuna") — muchos personajes están indexados solo por el nombre
-  // por el que son más conocidos.
-  if (!img) {
-    const parts = name.trim().split(/\s+/)
-    const lastWord = parts[parts.length - 1]
-    if (lastWord && lastWord !== name) {
-      console.log(`[grid-diario] "${name}" → probando último intento con "${lastWord}"`)
-      img = await fetch(`https://api.jikan.moe/v4/characters?q=${encodeURIComponent(lastWord)}&limit=1`)
-        .then(r => (r.ok ? r.json() : null))
-        .then(data => data?.data?.[0]?.images?.jpg?.image_url ?? null)
-        .catch(() => null)
-    }
-  }
-
-  console.log(`[grid-diario] "${name}" → resultado final:`, img ? 'encontrada' : 'SIN IMAGEN')
-  return img
-}
 
 // Tarjeta de solo lectura, usada en la pantalla de revisión (después de
 // haber jugado) para mostrar lo que pusiste y la respuesta correcta.
@@ -248,14 +153,7 @@ export default function AnimeGridDiarioPhase({ dateStr }: { dateStr: string }) {
           if (url) {
             // La guardamos en la base para no tener que volver a pedírsela a
             // la API la próxima vez que salga este personaje.
-            supabase
-              .from('character_guess_pool')
-              .update({ cover_url: url })
-              .eq('character_name', c.character_name)
-              .eq('anime_slug', c.anime_slug)
-              .then(({ error }) => {
-                if (error) console.log(`[grid-diario] no se pudo guardar la foto de "${c.character_name}"`, error)
-              })
+            void cacheCharacterImage(c.character_name, url, c.anime_slug)
           }
           await new Promise(resolve => setTimeout(resolve, 500))
         }

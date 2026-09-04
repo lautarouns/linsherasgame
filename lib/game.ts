@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { nowSynced } from './serverTime'
 import { loadTrackPool, seededShuffle } from './tracks'
+import { ANIME_NAMES } from './animeImage'
 
 export async function startPickingPhase(roomId: string, songsPerPlayer = 1, seconds = 120) {
   const deadline = new Date(nowSynced() + seconds * 1000).toISOString()
@@ -125,7 +126,8 @@ export async function startDuelPhase(roomId: string, totalRounds = 10, roundSeco
 }
 
 // Arranca el modo Duelo de Anime: arma `totalRounds` rondas a partir del
-// pool de personajes en `anime_characters`, mismo patrón que startDuelPhase.
+// pool de personajes combinado de `anime_characters` y `character_guess_pool`,
+// mismo patrón que startDuelPhase.
 export async function startAnimeDuelPhase(roomId: string, totalRounds = 10, roundSeconds = 20) {
   const { data: existingDuels } = await supabase
     .from('anime_duels')
@@ -136,8 +138,29 @@ export async function startAnimeDuelPhase(roomId: string, totalRounds = 10, roun
     await supabase.from('anime_duels').delete().eq('room_id', roomId)
   }
 
-  const { data } = await supabase.from('anime_characters').select('*')
-  const pool = data ?? []
+  // El pool de personajes se arma combinando `anime_characters` (cargado a
+  // mano, con anime_title y cover_url ya listos) y `character_guess_pool`
+  // (el mismo pool que usa el Grid Diario, donde el anime viene como slug y
+  // hay que mapearlo a nombre legible con ANIME_NAMES).
+  const [{ data: manualPool }, { data: gridPool }] = await Promise.all([
+    supabase.from('anime_characters').select('character_name, anime_title, cover_url'),
+    supabase.from('character_guess_pool').select('character_name, anime_slug, cover_url'),
+  ])
+
+  const fromGrid = (gridPool ?? []).map(c => ({
+    character_name: c.character_name,
+    anime_title: ANIME_NAMES[c.anime_slug] ?? c.anime_slug,
+    cover_url: c.cover_url,
+  }))
+
+  // Si un personaje aparece en los dos pools, nos quedamos con la versión
+  // que ya tenga foto cargada, para no perder una foto que ya cacheamos.
+  const byName = new Map<string, { character_name: string; anime_title: string; cover_url: string | null }>()
+  for (const c of [...(manualPool ?? []), ...fromGrid]) {
+    const existing = byName.get(c.character_name)
+    if (!existing || (!existing.cover_url && c.cover_url)) byName.set(c.character_name, c)
+  }
+  const pool = Array.from(byName.values())
   if (pool.length === 0) return
 
   const shuffled = seededShuffle(pool, roomId + Date.now())

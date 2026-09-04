@@ -3,16 +3,12 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { seededShuffle } from '@/lib/tracks'
 import { Character, CategoryConfig, Cell, compareCharacters } from '@/lib/characterdle'
+import { ANIME_NAMES } from '@/lib/animeImage'
 import { useRouter } from 'next/navigation'
 
 type GuessRow = {
   character: Character
   comparison: Record<string, Cell>
-}
-
-const ANIME_NAMES: Record<string, string> = {
-  'attack-on-titan': 'Attack on Titan',
-  'jujutsu-kaisen': 'Jujutsu Kaisen',
 }
 
 const HINT_EVERY = 5
