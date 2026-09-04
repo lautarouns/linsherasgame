@@ -32,6 +32,15 @@ type SavedGame = {
   images: Record<string, string | null>
 }
 
+// Progreso a mitad de partida (entre niveles) — separado de SavedGame, que
+// solo se escribe cuando ya se terminaron los 3 niveles.
+type PartialProgress = {
+  levelIndex: number
+  history: Record<Difficulty, LevelResult | null>
+  answers: Answer[]
+  results: boolean[][] | null
+}
+
 const levels: Difficulty[] = ['easy', 'medium', 'hard']
 const levelLabels: Record<Difficulty, string> = {
   easy: 'Fácil',
@@ -92,6 +101,8 @@ export default function AnimeGridDiarioPhase({ dateStr }: { dateStr: string }) {
   const [savedGame, setSavedGame] = useState<SavedGame | null>(null)
   const [activeSuggestion, setActiveSuggestion] = useState<{ index: number; field: 'name' | 'anime' } | null>(null)
 
+  const progressKey = `anime_grid_diario_progress_${dateStr}`
+
   useEffect(() => {
     let cancelled = false
 
@@ -139,6 +150,22 @@ export default function AnimeGridDiarioPhase({ dateStr }: { dateStr: string }) {
       setCharactersByLevel(selected)
       setAllCharacters((data ?? []) as AnimeCharacterRow[])
 
+      // Restaurar progreso a mitad de partida (niveles ya resueltos, o el
+      // nivel actual con sus resultados) para que un F5 no permita rejugar
+      // niveles ya hechos.
+      const progresoGuardado = localStorage.getItem(progressKey)
+      if (progresoGuardado) {
+        try {
+          const progress = JSON.parse(progresoGuardado) as PartialProgress
+          setLevelIndex(progress.levelIndex)
+          setHistory(progress.history)
+          setAnswers(progress.answers)
+          setResults(progress.results)
+        } catch (e) {
+          // progreso corrupto — se ignora y arranca de cero
+        }
+      }
+
       // Buscamos en vivo la foto de los personajes que no tienen cover_url —
       // UNA POR VEZ, con una pausa entre cada una. Pedirlas todas juntas
       // (como hacíamos antes) revienta el límite de pedidos por segundo de
@@ -165,6 +192,14 @@ export default function AnimeGridDiarioPhase({ dateStr }: { dateStr: string }) {
     void loadCharacters()
     return () => { cancelled = true }
   }, [dateStr])
+
+  // Guarda el progreso parcial en cada cambio, mientras se está jugando
+  // (no mientras carga ni en la pantalla de "ya jugaste hoy").
+  useEffect(() => {
+    if (isLoading || savedGame) return
+    const progress: PartialProgress = { levelIndex, history, answers, results }
+    localStorage.setItem(progressKey, JSON.stringify(progress))
+  }, [isLoading, savedGame, progressKey, levelIndex, history, answers, results])
 
   const difficulty = levels[levelIndex]
   const characters = charactersByLevel[difficulty]
@@ -228,6 +263,7 @@ export default function AnimeGridDiarioPhase({ dateStr }: { dateStr: string }) {
       const fullHistory = updatedHistory as Record<Difficulty, LevelResult>
       const saved: SavedGame = { completado: true, history: fullHistory, images }
       localStorage.setItem(`anime_grid_diario_${dateStr}`, JSON.stringify(saved))
+      localStorage.removeItem(progressKey)
     }
   }
 

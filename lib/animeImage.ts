@@ -90,18 +90,18 @@ export const ANIME_NAMES: Record<string, string> = {
 // primero contra Jikan (API de MyAnimeList) y, si no lo encuentra, contra
 // AniList (otra base de datos pública de anime) como segundo intento.
 export async function fetchCharacterImageLive(name: string): Promise<string | null> {
-  const fetchJikanOnce = () =>
-    fetch(`https://api.jikan.moe/v4/characters?q=${encodeURIComponent(name)}&limit=1`)
+  const fetchJikan = (query: string) =>
+    fetch(`https://api.jikan.moe/v4/characters?q=${encodeURIComponent(query)}&limit=1`)
       .then(r => (r.ok ? r.json() : null))
       .then(data => data?.data?.[0]?.images?.jpg?.image_url ?? null)
       .catch(() => null)
 
-  const fetchAniList = () => {
-    const query = `query ($search: String) { Character(search: $search) { image { large } } }`
+  const fetchAniList = (query: string) => {
+    const gql = `query ($search: String) { Character(search: $search) { image { large } } }`
     return fetch('https://graphql.anilist.co', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ query, variables: { search: name } })
+      body: JSON.stringify({ query: gql, variables: { search: query } })
     })
       .then(r => (r.ok ? r.json() : null))
       .then(data => data?.data?.Character?.image?.large ?? null)
@@ -110,27 +110,27 @@ export async function fetchCharacterImageLive(name: string): Promise<string | nu
 
   // Jikan es gratuito y a veces devuelve 504 por saturación puntual — se
   // reintenta una vez antes de pasar a la segunda fuente.
-  let img = await fetchJikanOnce()
+  let img = await fetchJikan(name)
   if (!img) {
     await new Promise(resolve => setTimeout(resolve, 1000))
-    img = await fetchJikanOnce()
+    img = await fetchJikan(name)
   }
   if (!img) {
-    img = await fetchAniList()
+    img = await fetchAniList(name)
   }
 
   // Último intento: si el nombre completo no dio nada en ninguna de las dos
   // fuentes, probamos solo con la última palabra (ej: "Sukuna" en vez de
   // "Ryomen Sukuna") — muchos personajes están indexados solo por el nombre
-  // por el que son más conocidos.
+  // por el que son más conocidos, o el nombre completo no matchea por una
+  // transliteración distinta (ej: AniList tiene "Tanjirou" y nosotros
+  // cargamos "Tanjiro"). Se prueban las dos fuentes de nuevo con ese recorte.
   if (!img) {
     const parts = name.trim().split(/\s+/)
     const lastWord = parts[parts.length - 1]
     if (lastWord && lastWord !== name) {
-      img = await fetch(`https://api.jikan.moe/v4/characters?q=${encodeURIComponent(lastWord)}&limit=1`)
-        .then(r => (r.ok ? r.json() : null))
-        .then(data => data?.data?.[0]?.images?.jpg?.image_url ?? null)
-        .catch(() => null)
+      img = await fetchJikan(lastWord)
+      if (!img) img = await fetchAniList(lastWord)
     }
   }
 
@@ -140,8 +140,17 @@ export async function fetchCharacterImageLive(name: string): Promise<string | nu
 // Guarda en `character_guess_pool` la foto ya encontrada, para no tener que
 // volver a pedírsela a la API la próxima vez que salga este personaje.
 export async function cacheCharacterImage(characterName: string, url: string, animeSlug?: string) {
-  let query = supabase.from('character_guess_pool').update({ cover_url: url }).eq('character_name', characterName)
-  if (animeSlug) query = query.eq('anime_slug', animeSlug)
-  const { error } = await query
-  if (error) console.log(`[anime-image] no se pudo guardar la foto de "${characterName}"`, error)
+  // El personaje puede venir del pool del Grid Diario (`character_guess_pool`)
+  // o del pool cargado a mano para el Duelo (`anime_characters`) — probamos
+  // guardar en los dos, el que tenga una fila con ese nombre la actualiza.
+  let gridQuery = supabase.from('character_guess_pool').update({ cover_url: url }).eq('character_name', characterName)
+  if (animeSlug) gridQuery = gridQuery.eq('anime_slug', animeSlug)
+
+  const [gridResult, manualResult] = await Promise.all([
+    gridQuery,
+    supabase.from('anime_characters').update({ cover_url: url }).eq('character_name', characterName),
+  ])
+
+  if (gridResult.error) console.log(`[anime-image] no se pudo guardar la foto de "${characterName}" en character_guess_pool`, gridResult.error)
+  if (manualResult.error) console.log(`[anime-image] no se pudo guardar la foto de "${characterName}" en anime_characters`, manualResult.error)
 }

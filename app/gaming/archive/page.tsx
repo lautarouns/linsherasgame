@@ -25,7 +25,7 @@ export default function GamingArchive() {
   useEffect(() => {
     const loaded: Record<string, string> = {}
     dates.forEach(d => {
-      const saved = localStorage.getItem(`gaming_daily_${d}`)
+      const saved = localStorage.getItem(`gaming_daily_v2_${d}`)
       if (saved) {
         try {
           const parsed = JSON.parse(saved)

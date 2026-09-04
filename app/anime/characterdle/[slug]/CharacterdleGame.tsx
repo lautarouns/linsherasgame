@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { seededShuffle } from '@/lib/tracks'
 import { Character, CategoryConfig, Cell, compareCharacters } from '@/lib/characterdle'
-import { ANIME_NAMES } from '@/lib/animeImage'
+import { ANIME_NAMES, fetchCharacterImageLive, cacheCharacterImage } from '@/lib/animeImage'
 import { useRouter } from 'next/navigation'
 
 type GuessRow = {
@@ -104,6 +104,26 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
         }
         setIsLoaded(true)
       }
+
+      // Buscamos en vivo la foto de los personajes que no tengan cover_url —
+      // UNA POR VEZ, con pausa entre cada una, igual que en Grid Diario y el
+      // Duelo. Apenas se encuentra una se actualiza en pantalla (pool, el
+      // personaje objetivo y los intentos ya hechos) y se cachea en la base.
+      const missing = allCharacters.filter(c => !c.cover_url)
+      ;(async () => {
+        for (const c of missing) {
+          if (cancelled) return
+          const url = await fetchCharacterImageLive(c.character_name)
+          if (cancelled) return
+          if (url) {
+            setPool(prev => prev.map(x => x.character_name === c.character_name ? { ...x, cover_url: url } : x))
+            setTarget(prev => prev && prev.character_name === c.character_name ? { ...prev, cover_url: url } : prev)
+            setGuesses(prev => prev.map(row => row.character.character_name === c.character_name ? { ...row, character: { ...row.character, cover_url: url } } : row))
+            void cacheCharacterImage(c.character_name, url, slug)
+          }
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      })()
     }
     load()
     return () => { cancelled = true }

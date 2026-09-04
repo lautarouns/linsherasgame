@@ -192,7 +192,7 @@ export default function DuelPhase({
         const j = Math.floor(Math.random() * (i + 1))
         ;[matches[i], matches[j]] = [matches[j], matches[i]]
       }
-      setSuggestions(matches.slice(0, 15))
+      setSuggestions(matches.slice(0, 30))
     }, 150)
     return () => clearTimeout(t)
   }, [guess, showReveal, pool])
@@ -331,7 +331,7 @@ export default function DuelPhase({
         </div>
 
         {showSuggestions && suggestions.length > 0 && (
-          <ul className="track-results" style={{ marginTop: 8 }}>
+          <ul className="track-results is-scrollable" style={{ marginTop: 8 }}>
             {suggestions.map((s, i) => (
               <li key={i} onClick={() => submitGuess(s.title)} className="track-result" style={{ cursor: 'pointer' }}>
                 <img src={s.cover} alt="" />

@@ -180,7 +180,7 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
       const matches = pool
         .filter(t => !triedTitles.includes(normalize(baseTitle(t.title))))
         .filter(t => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q))
-        .slice(0, 6)
+        .slice(0, 30)
       setSuggestions(matches)
     }, 150)
 
@@ -221,6 +221,25 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
       audio.currentTime = 0
     }, allowedSeconds * 1000)
   }, [allowedSeconds, dailyTrack])
+
+  // Una vez terminado el desafío (ganado o perdido) se puede escuchar el
+  // clip entero, sin el corte de tiempo que aplica durante la partida.
+  const handleListenFull = useCallback(() => {
+    const audio = audioRef.current
+    if (!audio || !dailyTrack) return
+
+    if (playbackTimerRef.current) {
+      window.clearTimeout(playbackTimerRef.current)
+      playbackTimerRef.current = null
+    }
+
+    if (audio.src !== dailyTrack.previewUrl) {
+      audio.src = dailyTrack.previewUrl
+    }
+
+    audio.currentTime = 0
+    audio.play().catch(e => console.log('Error de reproducción:', e))
+  }, [dailyTrack])
 
   const processGuess = (guessTitle: string, guessArtist?: string) => {
     if (isWin || isLose || !dailyTrack || !guessTitle.trim()) return
@@ -400,7 +419,7 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
           />
 
           {showSuggestions && suggestions.length > 0 && (
-            <ul className="track-results" style={{ marginTop: 0 }}>
+            <ul className="track-results is-scrollable" style={{ marginTop: 0 }}>
               {suggestions.map((track, i) => (
                 <li key={i} className="track-result" onClick={() => handleSelectSuggestion(track)}>
                   <img src={track.cover} alt="" />
@@ -467,6 +486,10 @@ export default function DailyGame({ dateId, isArchive = false }: { dateId?: stri
               />
               <h3 style={{ margin: '0 0 4px', fontSize: 24 }}>{dailyTrack.title}</h3>
               <span style={{ color: 'var(--muted)' }}>{dailyTrack.artist}</span>
+
+              <button type="button" className="btn-principal" onClick={handleListenFull} style={{ marginTop: 16, padding: '10px 24px' }}>
+                ▶ Escuchar canción
+              </button>
 
               {message && (
                 <p style={{ margin: '20px 0 0', color: isWin ? '#fff' : 'rgba(255, 138, 128, 0.9)' }}>

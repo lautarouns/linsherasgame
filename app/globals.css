@@ -922,6 +922,32 @@ select {
   font-size: 14px;
 }
 
+.track-results.is-scrollable {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(247, 201, 72, 0.5) rgba(255, 255, 255, 0.05);
+}
+
+.track-results.is-scrollable::-webkit-scrollbar {
+  width: 8px;
+}
+
+.track-results.is-scrollable::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+}
+
+.track-results.is-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(247, 201, 72, 0.45);
+  border-radius: 8px;
+}
+
+.track-results.is-scrollable::-webkit-scrollbar-thumb:hover {
+  background: rgba(247, 201, 72, 0.65);
+}
+
 .track-result {
   display: flex;
   align-items: center;
