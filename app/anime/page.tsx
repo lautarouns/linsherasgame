@@ -153,12 +153,12 @@ export default function AnimeHome() {
         <h2 className="page-title sg-rise sg-d3">Anime</h2>
         <p className="page-subtitle sg-rise sg-d4">Adiviná el anime del día, o entrá con amigos a jugar en sala.</p>
 
-        <div style={{ display: 'flex', gap: 12, width: 'min(100%, 480px)', marginBottom: 18 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, width: 'min(100%, 480px)', marginBottom: 18 }}>
           <button
             type="button"
             onClick={() => run('Desafío Diario', () => router.push('/anime/daily'))}
             className="btn-principal sg-sheen sg-rise sg-d5"
-            style={{ flex: 1 }}
+            style={{ flex: '1 1 140px', minWidth: 0, whiteSpace: 'normal', textAlign: 'center' }}
           >
             Desafío Diario
           </button>
@@ -166,7 +166,7 @@ export default function AnimeHome() {
             type="button"
             onClick={() => run('Adiviná el Personaje', () => router.push('/anime/characterdle'))}
             className="btn-principal sg-sheen sg-rise sg-d5"
-            style={{ flex: 1 }}
+            style={{ flex: '1 1 140px', minWidth: 0, whiteSpace: 'normal', textAlign: 'center' }}
           >
             Adiviná el Personaje
           </button>
@@ -174,7 +174,7 @@ export default function AnimeHome() {
             type="button"
             onClick={() => run('Grid Diario', () => router.push('/anime/grid-diario'))}
             className="btn-principal sg-sheen sg-rise sg-d5"
-            style={{ flex: 1 }}
+            style={{ flex: '1 1 140px', minWidth: 0, whiteSpace: 'normal', textAlign: 'center' }}
           >
             Grid Diario
           </button>

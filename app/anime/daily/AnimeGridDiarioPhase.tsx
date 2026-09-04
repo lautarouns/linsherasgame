@@ -245,6 +245,18 @@ export default function AnimeGridDiarioPhase({ dateStr }: { dateStr: string }) {
           const url = await fetchCharacterImageLive(c.character_name)
           if (cancelled) return
           setImages(prev => ({ ...prev, [c.character_name]: url }))
+          if (url) {
+            // La guardamos en la base para no tener que volver a pedírsela a
+            // la API la próxima vez que salga este personaje.
+            supabase
+              .from('character_guess_pool')
+              .update({ cover_url: url })
+              .eq('character_name', c.character_name)
+              .eq('anime_slug', c.anime_slug)
+              .then(({ error }) => {
+                if (error) console.log(`[grid-diario] no se pudo guardar la foto de "${c.character_name}"`, error)
+              })
+          }
           await new Promise(resolve => setTimeout(resolve, 500))
         }
       })()
@@ -426,7 +438,14 @@ export default function AnimeGridDiarioPhase({ dateStr }: { dateStr: string }) {
                       value={answers[index].name}
                       onChange={event => updateAnswer(index, 'name', event.target.value)}
                       onFocus={() => setActiveSuggestion({ index, field: 'name' })}
-                      onBlur={() => setTimeout(() => setActiveSuggestion(null), 150)}
+                      onBlur={() => {
+                        const self = { index, field: 'name' as const }
+                        setTimeout(() => {
+                          setActiveSuggestion(prev =>
+                            prev && prev.index === self.index && prev.field === self.field ? null : prev
+                          )
+                        }, 150)
+                      }}
                       disabled={!!results}
                       autoComplete="off"
                     />
@@ -435,7 +454,11 @@ export default function AnimeGridDiarioPhase({ dateStr }: { dateStr: string }) {
                         {getNameSuggestions(answers[index].name).map(c => (
                           <li
                             key={c.character_name}
-                            onClick={() => { updateAnswer(index, 'name', c.character_name); setActiveSuggestion(null) }}
+                            onMouseDown={event => {
+                              event.preventDefault()
+                              updateAnswer(index, 'name', c.character_name)
+                              setActiveSuggestion(null)
+                            }}
                             style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--table-row)', border: '1px solid var(--soft)', cursor: 'pointer', fontSize: 13, color: '#fff' }}
                           >
                             {c.character_name}
@@ -451,7 +474,14 @@ export default function AnimeGridDiarioPhase({ dateStr }: { dateStr: string }) {
                       value={answers[index].anime}
                       onChange={event => updateAnswer(index, 'anime', event.target.value)}
                       onFocus={() => setActiveSuggestion({ index, field: 'anime' })}
-                      onBlur={() => setTimeout(() => setActiveSuggestion(null), 150)}
+                      onBlur={() => {
+                        const self = { index, field: 'anime' as const }
+                        setTimeout(() => {
+                          setActiveSuggestion(prev =>
+                            prev && prev.index === self.index && prev.field === self.field ? null : prev
+                          )
+                        }, 150)
+                      }}
                       disabled={!!results}
                       autoComplete="off"
                     />
@@ -460,7 +490,11 @@ export default function AnimeGridDiarioPhase({ dateStr }: { dateStr: string }) {
                         {getAnimeSuggestions(answers[index].anime).map(name => (
                           <li
                             key={name}
-                            onClick={() => { updateAnswer(index, 'anime', name); setActiveSuggestion(null) }}
+                            onMouseDown={event => {
+                              event.preventDefault()
+                              updateAnswer(index, 'anime', name)
+                              setActiveSuggestion(null)
+                            }}
                             style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--table-row)', border: '1px solid var(--soft)', cursor: 'pointer', fontSize: 13, color: '#fff' }}
                           >
                             {name}

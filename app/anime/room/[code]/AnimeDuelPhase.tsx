@@ -165,9 +165,10 @@ export default function AnimeDuelPhase({
     return () => clearTimeout(t)
   }, [guess, showReveal, pool])
 
-  // 6. Al llegar la revelación, buscamos la foto del personaje en vivo (no la
-  // guardamos en ningún lado). Si el personaje ya tiene cover_url cargado a
-  // mano en la base, usamos ese directamente y no pegamos a la API.
+  // 6. Al llegar la revelación, buscamos la foto del personaje en vivo. Si el
+  // personaje ya tiene cover_url cargado en la base, usamos ese directamente
+  // y no pegamos a la API; si no, la guardamos en `anime_characters` apenas
+  // la encontramos para no volver a pedirla en futuros duelos.
   useEffect(() => {
     if (!showReveal || !duel) return
     if (duel.cover_url) {
@@ -192,6 +193,16 @@ export default function AnimeDuelPhase({
         img = await fetchImage()
       }
       if (!cancelled) setRevealImage(img)
+      if (img) {
+        supabase
+          .from('anime_characters')
+          .update({ cover_url: img })
+          .eq('character_name', duel.character_name)
+          .eq('anime_title', duel.anime_title)
+          .then(({ error }) => {
+            if (error) console.log(`[anime-duel] no se pudo guardar la foto de "${duel.character_name}"`, error)
+          })
+      }
     })()
 
     return () => { cancelled = true }
