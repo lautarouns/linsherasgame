@@ -153,20 +153,32 @@ export default function FutbolHome() {
         <h2 className="page-title sg-rise sg-d3">Fútbol</h2>
         <p className="page-subtitle sg-rise sg-d4">Entrá con tu nombre o uníndote a una sala.</p>
 
-        <div style={{ display: 'flex', gap: 12, width: 'min(100%, 480px)', marginBottom: 18 }}>
+        {/* Contenedor de botones ampliado y con wrap para acomodar los 3 modos */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, width: 'min(100%, 560px)', marginBottom: 18, justifyContent: 'center' }}>
           <button
             type="button"
             onClick={() => run('Carrera Diaria', () => router.push('/futbol/daily'))}
             className="btn-principal sg-sheen sg-rise sg-d5"
-            style={{ flex: 1 }}
+            style={{ flex: '1 1 160px' }}
           >
             Carrera Diaria
           </button>
+          
+          {/* Nuevo Botón del modo clásico */}
+          <button
+            type="button"
+            onClick={() => run('Desafío Clásico', () => router.push('/futbol/classic'))}
+            className="btn-principal sg-sheen sg-rise sg-d5"
+            style={{ flex: '1 1 160px' }}
+          >
+            Desafío Clásico
+          </button>
+
           <button
             type="button"
             onClick={() => run('Grid Diario', () => router.push('/futbol/grid-diario'))}
             className="btn-principal sg-sheen sg-rise sg-d5"
-            style={{ flex: 1 }}
+            style={{ flex: '1 1 160px' }}
           >
             Grid Diario
           </button>

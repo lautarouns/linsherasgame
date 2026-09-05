@@ -20,6 +20,24 @@ type Answer = {
   nationality: string
 }
 
+type LevelResult = {
+  players: FootballPlayer[]
+  answers: Answer[]
+  results: boolean[][]
+}
+
+type SavedGame = {
+  completado: true
+  history: Record<Difficulty, LevelResult>
+}
+
+type PartialProgress = {
+  levelIndex: number
+  history: Record<Difficulty, LevelResult | null>
+  answers: Answer[]
+  results: boolean[][] | null
+}
+
 const levels: Difficulty[] = ['easy', 'medium', 'hard']
 const levelLabels: Record<Difficulty, string> = {
   easy: 'Fácil',
@@ -30,6 +48,37 @@ const levelLabels: Record<Difficulty, string> = {
 const emptyAnswers = (): Answer[] =>
   Array.from({ length: 4 }, () => ({ name: '', nationality: '' }))
 
+// Tarjeta de solo lectura para la pantalla de resultados
+function ReadonlyCard({
+  player, answer, nameCorrect, natCorrect
+}: {
+  player: FootballPlayer
+  answer: Answer
+  nameCorrect: boolean
+  natCorrect: boolean
+}) {
+  return (
+    <div className="grid-diario-card">
+      {player.image_url ? (
+        <img src={player.image_url} alt="Jugador de fútbol" className="grid-diario-image" />
+      ) : (
+        <div className="grid-diario-image grid-diario-image-empty">Sin foto</div>
+      )}
+      <div className={`grid-diario-input${nameCorrect ? ' is-correct' : ' is-incorrect'}`} style={{ display: 'flex', alignItems: 'center' }}>
+        {answer.name || <span style={{ color: 'var(--muted)' }}>(vacío)</span>}
+      </div>
+      <div className={`grid-diario-input${natCorrect ? ' is-correct' : ' is-incorrect'}`} style={{ display: 'flex', alignItems: 'center' }}>
+        {answer.nationality || <span style={{ color: 'var(--muted)' }}>(vacío)</span>}
+      </div>
+      {(!nameCorrect || !natCorrect) && (
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+          Era <strong style={{ color: '#fff' }}>{player.name}</strong> — {player.nationality}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function GridDiarioPhase({ dateStr }: { dateStr: string }) {
   const router = useRouter()
   const [playersByLevel, setPlayersByLevel] = useState<Record<Difficulty, FootballPlayer[]>>({
@@ -38,22 +87,32 @@ export default function GridDiarioPhase({ dateStr }: { dateStr: string }) {
   const [levelIndex, setLevelIndex] = useState(0)
   const [answers, setAnswers] = useState<Answer[]>(emptyAnswers)
   const [results, setResults] = useState<boolean[][] | null>(null)
+  const [history, setHistory] = useState<Record<Difficulty, LevelResult | null>>({ easy: null, medium: null, hard: null })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [yaJugadoHoy, setYaJugadoHoy] = useState(false)
+  const [savedGame, setSavedGame] = useState<SavedGame | null>(null)
+
+  const progressKey = `futbol_grid_diario_progress_${dateStr}`
 
   useEffect(() => {
     let cancelled = false
 
     async function loadPlayers() {
-      // Verificamos en localStorage si ya completó el grid de hoy antes de llamar a la DB
+      // Verificamos en localStorage si ya completó el grid de hoy
       const estadoGuardado = localStorage.getItem(`grid_diario_${dateStr}`)
-      if (estadoGuardado === 'completado') {
-        if (!cancelled) {
-          setYaJugadoHoy(true)
-          setIsLoading(false)
+      if (estadoGuardado) {
+        try {
+          const parsed = JSON.parse(estadoGuardado) as SavedGame
+          if (parsed.completado) {
+            if (!cancelled) {
+              setSavedGame(parsed)
+              setIsLoading(false)
+            }
+            return
+          }
+        } catch (e) {
+          // Formato viejo (string 'completado'), lo ignoramos y dejamos jugar o lo limpiamos
         }
-        return
       }
 
       const { data, error: loadError } = await supabase
@@ -79,12 +138,34 @@ export default function GridDiarioPhase({ dateStr }: { dateStr: string }) {
       } else {
         setPlayersByLevel(selected)
       }
+
+      // Restaurar progreso a mitad de partida (niveles ya resueltos)
+      const progresoGuardado = localStorage.getItem(progressKey)
+      if (progresoGuardado) {
+        try {
+          const progress = JSON.parse(progresoGuardado) as PartialProgress
+          setLevelIndex(progress.levelIndex)
+          setHistory(progress.history)
+          setAnswers(progress.answers)
+          setResults(progress.results)
+        } catch (e) {
+          // progreso corrupto
+        }
+      }
+
       setIsLoading(false)
     }
 
     void loadPlayers()
     return () => { cancelled = true }
   }, [dateStr])
+
+  // Guardar progreso parcial
+  useEffect(() => {
+    if (isLoading || savedGame) return
+    const progress: PartialProgress = { levelIndex, history, answers, results }
+    localStorage.setItem(progressKey, JSON.stringify(progress))
+  }, [isLoading, savedGame, progressKey, levelIndex, history, answers, results])
 
   const difficulty = levels[levelIndex]
   const players = playersByLevel[difficulty]
@@ -99,7 +180,7 @@ export default function GridDiarioPhase({ dateStr }: { dateStr: string }) {
 
   const submit = () => {
     if (results) return
-    setResults(players.map((player, index) => {
+    const computed = players.map((player, index) => {
       const rawCandidate = answers[index].name.trim()
       const candidateName = normalize(rawCandidate)
       
@@ -119,11 +200,20 @@ export default function GridDiarioPhase({ dateStr }: { dateStr: string }) {
       const isNatCorrect = candidateNat !== '' && candidateNat === targetNat
 
       return [isNameCorrect, isNatCorrect]
-    }))
+    })
+    setResults(computed)
 
-    // Al enviar los resultados del último nivel, guardamos que ya jugó hoy
+    const updatedHistory: Record<Difficulty, LevelResult | null> = {
+      ...history,
+      [difficulty]: { players, answers, results: computed }
+    }
+    setHistory(updatedHistory)
+
     if (isLastLevel) {
-      localStorage.setItem(`grid_diario_${dateStr}`, 'completado')
+      const fullHistory = updatedHistory as Record<Difficulty, LevelResult>
+      const saved: SavedGame = { completado: true, history: fullHistory }
+      localStorage.setItem(`grid_diario_${dateStr}`, JSON.stringify(saved))
+      localStorage.removeItem(progressKey)
     }
   }
 
@@ -141,17 +231,48 @@ export default function GridDiarioPhase({ dateStr }: { dateStr: string }) {
     return <div className="theme-futbol"><div className="page-shell"><div className="page-card">Cargando Grid Diario...</div></div></div>
   }
 
-  // Pantalla de bloqueo si ya jugó
-  if (yaJugadoHoy) {
+  // Pantalla de resultados cuando ya jugó
+  if (savedGame) {
+    const totalScore = levels.reduce((sum, d) => sum + savedGame.history[d].results.flat().filter(Boolean).length, 0)
     return (
       <div className="theme-futbol">
         <div className="page-shell">
-          <main className="daily-card page-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '300px', textAlign: 'center' }}>
-            <h1 className="daily-title" style={{ marginBottom: 10 }}>¡Ya jugaste hoy!</h1>
-            <p className="page-subtitle" style={{ marginBottom: 30 }}>
-              Volvé mañana a partir de las 00:00 para un nuevo Grid Diario.
+          <main className="daily-card page-card">
+            <div className="daily-header">
+              <div>
+                <p className="daily-kicker">Ya jugaste hoy</p>
+                <h1 className="daily-title">Tus resultados</h1>
+              </div>
+              <button className="btn-secondary" onClick={() => router.push('/futbol')}>Volver</button>
+            </div>
+            <p className="page-subtitle" style={{ textAlign: 'left', marginBottom: 8 }}>
+              Puntaje total: <strong style={{ color: 'var(--foreground)' }}>{totalScore}/24</strong>. Volvé mañana a partir de las 00:00 para un nuevo Grid Diario.
             </p>
-            <button className="btn-principal" onClick={() => router.push('/futbol')}>
+
+            {levels.map(lvl => {
+              const level = savedGame.history[lvl]
+              const levelScore = level.results.flat().filter(Boolean).length
+              return (
+                <div key={lvl} style={{ marginTop: 26 }}>
+                  <h3 className="section-title" style={{ marginBottom: 10 }}>
+                    {levelLabels[lvl]} — {levelScore}/8
+                  </h3>
+                  <div className="grid-diario-grid">
+                    {level.players.map((player, index) => (
+                      <ReadonlyCard
+                        key={`${player.name}-${index}`}
+                        player={player}
+                        answer={level.answers[index]}
+                        nameCorrect={level.results[index][0]}
+                        natCorrect={level.results[index][1]}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+
+            <button className="btn-principal" style={{ width: '100%', marginTop: 26 }} onClick={() => router.push('/futbol')}>
               Volver al menú
             </button>
           </main>
