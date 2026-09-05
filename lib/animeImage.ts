@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { normalize } from './tracks'
 
 // Nombre legible por cada anime cargado — sumá acá si agregás uno nuevo.
 export const ANIME_NAMES: Record<string, string> = {
@@ -86,26 +87,73 @@ export const ANIME_NAMES: Record<string, string> = {
   'casshern-sins': 'Casshern Sins'
 }
 
+// Compara el/los título(s) de anime que trajo la API contra el anime
+// esperado — con normalize() para ignorar tildes/mayúsculas, y de forma
+// laxa (includes en ambos sentidos) porque los títulos de Jikan/AniList a
+// veces difieren un poco (ej. llevan ": Season 2", o el romaji vs inglés).
+function titleMatches(candidateTitles: (string | null | undefined)[], expected: string): boolean {
+  const target = normalize(expected)
+  if (!target) return true
+  return candidateTitles.some(t => {
+    if (!t) return false
+    const n = normalize(t)
+    return !!n && (n === target || n.includes(target) || target.includes(n))
+  })
+}
+
 // Busca la foto de un personaje en vivo, sin guardarla en ningún lado —
 // primero contra Jikan (API de MyAnimeList) y, si no lo encuentra, contra
 // AniList (otra base de datos pública de anime) como segundo intento.
-export async function fetchCharacterImageLive(name: string): Promise<string | null> {
-  const fetchJikan = (query: string) =>
-    fetch(`https://api.jikan.moe/v4/characters?q=${encodeURIComponent(query)}&limit=1`)
+//
+// Cuando se pasa `expectedAnime`, se verifica que el personaje encontrado
+// realmente pertenezca a ESE anime antes de aceptar la foto — una búsqueda
+// por texto plano puede matchear a un personaje de otro anime que tenga el
+// mismo nombre o un nombre parecido (ej. "Lucy" existe en varios animes
+// distintos), y sin esta verificación terminábamos guardando la foto de un
+// personaje totalmente distinto.
+export async function fetchCharacterImageLive(name: string, expectedAnime?: string): Promise<string | null> {
+  const fetchJikan = async (query: string): Promise<string | null> => {
+    const candidate = await fetch(`https://api.jikan.moe/v4/characters?q=${encodeURIComponent(query)}&limit=1`)
       .then(r => (r.ok ? r.json() : null))
-      .then(data => data?.data?.[0]?.images?.jpg?.image_url ?? null)
+      .then(data => data?.data?.[0] ?? null)
       .catch(() => null)
 
-  const fetchAniList = (query: string) => {
-    const gql = `query ($search: String) { Character(search: $search) { image { large } } }`
-    return fetch('https://graphql.anilist.co', {
+    const img = candidate?.images?.jpg?.image_url ?? null
+    if (!img) return null
+    if (!expectedAnime) return img
+
+    const full = await fetch(`https://api.jikan.moe/v4/characters/${candidate.mal_id}/full`)
+      .then(r => (r.ok ? r.json() : null))
+      .catch(() => null)
+    type JikanAnimeEntry = { anime?: { title?: string; title_english?: string } }
+    const animeTitles = ((full?.data?.anime ?? []) as JikanAnimeEntry[])
+      .flatMap(a => [a?.anime?.title, a?.anime?.title_english])
+    return titleMatches(animeTitles, expectedAnime) ? img : null
+  }
+
+  const fetchAniList = async (query: string): Promise<string | null> => {
+    const gql = `query ($search: String) {
+      Character(search: $search) {
+        image { large }
+        media(perPage: 5, sort: POPULARITY_DESC) { nodes { title { romaji english } } }
+      }
+    }`
+    const data = await fetch('https://graphql.anilist.co', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ query: gql, variables: { search: query } })
     })
       .then(r => (r.ok ? r.json() : null))
-      .then(data => data?.data?.Character?.image?.large ?? null)
       .catch(() => null)
+
+    const img = data?.data?.Character?.image?.large ?? null
+    if (!img) return null
+    if (!expectedAnime) return img
+
+    type AniListMediaNode = { title?: { romaji?: string; english?: string } }
+    const nodes = (data?.data?.Character?.media?.nodes ?? []) as AniListMediaNode[]
+    const animeTitles = nodes.flatMap(n => [n?.title?.romaji, n?.title?.english])
+    return titleMatches(animeTitles, expectedAnime) ? img : null
   }
 
   // Jikan es gratuito y a veces devuelve 504 por saturación puntual — se
@@ -124,7 +172,10 @@ export async function fetchCharacterImageLive(name: string): Promise<string | nu
   // "Ryomen Sukuna") — muchos personajes están indexados solo por el nombre
   // por el que son más conocidos, o el nombre completo no matchea por una
   // transliteración distinta (ej: AniList tiene "Tanjirou" y nosotros
-  // cargamos "Tanjiro"). Se prueban las dos fuentes de nuevo con ese recorte.
+  // cargamos "Tanjiro"). Se prueban las dos fuentes de nuevo con ese recorte
+  // — la verificación de anime de arriba es la que evita que este recorte
+  // (que es más propenso a falsos positivos, ej. "Tuxedo Mask" → "Mask")
+  // termine guardando la foto de un personaje sin relación.
   if (!img) {
     const parts = name.trim().split(/\s+/)
     const lastWord = parts[parts.length - 1]

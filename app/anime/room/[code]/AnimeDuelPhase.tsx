@@ -188,7 +188,7 @@ export default function AnimeDuelPhase({
         if (!cancelled) setCharacterImage(duel.cover_url)
         return
       }
-      const img = await fetchCharacterImageLive(duel.character_name)
+      const img = await fetchCharacterImageLive(duel.character_name, duel.anime_title)
       if (cancelled) return
       setCharacterImage(img)
       if (img) void cacheCharacterImage(duel.character_name, img)

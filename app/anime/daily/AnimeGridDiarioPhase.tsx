@@ -174,7 +174,7 @@ export default function AnimeGridDiarioPhase({ dateStr }: { dateStr: string }) {
       ;(async () => {
         for (const c of allSelected) {
           if (cancelled) return
-          const url = await fetchCharacterImageLive(c.character_name)
+          const url = await fetchCharacterImageLive(c.character_name, ANIME_NAMES[c.anime_slug] ?? c.anime_slug)
           if (cancelled) return
           setImages(prev => ({ ...prev, [c.character_name]: url }))
           if (url) {

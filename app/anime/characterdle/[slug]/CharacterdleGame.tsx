@@ -113,7 +113,7 @@ export default function CharacterdleGame({ slug, dateStr }: { slug: string; date
       ;(async () => {
         for (const c of missing) {
           if (cancelled) return
-          const url = await fetchCharacterImageLive(c.character_name)
+          const url = await fetchCharacterImageLive(c.character_name, ANIME_NAMES[slug] ?? slug)
           if (cancelled) return
           if (url) {
             setPool(prev => prev.map(x => x.character_name === c.character_name ? { ...x, cover_url: url } : x))
